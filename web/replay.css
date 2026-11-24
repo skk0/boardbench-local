@@ -197,3 +197,19 @@
 :root[data-theme="dark"] .rp-warn strong {
   color: #ffce79;
 }
+
+.rp-search {
+  border-block: 1px solid var(--line);
+  padding: 12px 0;
+  margin-bottom: 16px;
+}
+#rpMatches { max-height: 250px; overflow: auto; }
+.rp-controls-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.rp-controls-search button { margin-top: 6px; }
+#rpDelta { color: var(--sub); font-size: 13px; }

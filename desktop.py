@@ -104,6 +104,18 @@ def run_window(port, make_service, smoke=False):
                                 time.sleep(.1)
                             else:
                                 raise RuntimeError("桌面窗口未加载历史会话")
+                            window.evaluate_js("""
+                                const query = document.getElementById('rpQuery');
+                                query.value = 'L1';
+                                query.dispatchEvent(new Event('input'));
+                                document.getElementById('rpFind').click();
+                            """)
+                            for _ in range(60):
+                                if window.evaluate_js("!!document.querySelector('#rpMatches .rp-issue-hit')"):
+                                    break
+                                time.sleep(.1)
+                            else:
+                                raise RuntimeError("回放未能定位首条日志")
                             checked.set_result(True)
                             break
                         time.sleep(0.15)

@@ -112,12 +112,18 @@ async function loadRunResults() {
 async function showEvidence(rec, ref) {
   const box = modal("证据 " + ref + " · 会话 #" + rec.run);
   if (ref.startsWith("L")) {
+    const heading = box.firstElementChild;
     const entry = await get("/api/ai/evidence/" + rec.run + "/" + ref.slice(1));
+    if (!$("dialog").open || box.firstElementChild !== heading) return;
     box.append(
       el("p", entry.at + " · " + entry.source + " · " + entry.level),
       el("pre", entry.message),
     );
     if (entry.raw) box.append(el("p", "原始字节"), el("pre", entry.raw));
+    box.append(button("在回放中查看前后日志", () => {
+      $("dialog").close();
+      openReplay(rec.run, ref);
+    }));
   } else {
     const item = rec.snapshot.results.find((x) => x.ref === ref);
     if (item)

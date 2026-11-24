@@ -103,6 +103,23 @@ def routes(bench):
             )
         )
 
+    def match_response(run, row, upper):
+        if row is None:
+            return web.json_response(dict(event=None, context=[], upper=upper))
+        log_id = row["id"]
+        before = bench.rows(
+            FIELDS + " AND id<? ORDER BY id DESC LIMIT 5", (run, log_id)
+        )
+        event = annotate(row)
+        context = ([annotate(r) for r in reversed(before)] + [event]
+                   + [annotate(r) for r in page(run, log_id, upper, 3)])
+        return web.json_response(dict(event=event, context=context, upper=upper))
+
+    async def yield_to_capture(req):
+        await asyncio.sleep(0)
+        if req.transport is None or req.transport.is_closing():
+            raise asyncio.CancelledError
+
     @endpoints.get("/api/replay/{run}/next-issue")
     async def next_issue(req):
         run, after, upper, _ = bounds(req)
@@ -111,25 +128,45 @@ def routes(bench):
             if not rows:
                 break
             for row in rows:
-                event = annotate(row)
-                if event["issue_level"]:
-                    log_id = event["id"]
-                    before = bench.rows(
-                        FIELDS + " AND id<? ORDER BY id DESC LIMIT 5", (run, log_id)
-                    )
-                    following = page(run, log_id, upper, 3)
-                    context = (
-                        [annotate(r) for r in reversed(before)]
-                        + [event]
-                        + [annotate(r) for r in following]
-                    )
-                    return web.json_response(
-                        dict(event=event, context=context, upper=upper)
-                    )
+                if annotate(row)["issue_level"]:
+                    return match_response(run, row, upper)
             after = rows[-1]["id"]
-            await asyncio.sleep(0)
-            if req.transport is None or req.transport.is_closing():
-                raise asyncio.CancelledError
-        return web.json_response(dict(event=None, context=[], upper=upper))
+            await yield_to_capture(req)
+        return match_response(run, None, upper)
+
+    @endpoints.get("/api/replay/{run}/search")
+    async def search(req):
+        run, after, upper, _ = bounds(req)
+        term = req.query.get("q", "").strip()
+        direction = req.query.get("direction", "next")
+        if not term or len(term) > 160 or direction not in ("next", "previous"):
+            raise web.HTTPBadRequest(text="请输入 1–160 个字符并使用有效的查找方向。")
+        backwards = direction == "previous"
+        # An explicit #L reference is scoped to the same recording and frozen end.
+        ref = re.fullmatch(r"#?L([0-9]+)", term, re.I)
+        if ref:
+            try:
+                log_id = unsigned(ref[1], "日志编号")
+            except ValueError as exc:
+                raise web.HTTPBadRequest(text=str(exc)) from exc
+            rows = bench.rows(FIELDS + " AND id=? AND id<=?", (run, log_id, upper))
+            allowed = log_id < after if backwards else log_id > after
+            return match_response(run, rows[0] if rows and allowed else None, upper)
+
+        term = term.casefold()
+        while True:
+            if backwards:
+                rows = bench.rows(FIELDS + " AND id<? AND id<=? ORDER BY id DESC LIMIT 250",
+                                  (run, after, upper))
+            else:
+                rows = page(run, after, upper, 250)
+            for row in rows:
+                if any(term in ANSI.sub("", row[key]).casefold()
+                       for key in ("message", "source", "level")):
+                    return match_response(run, row, upper)
+            if len(rows) < 250:
+                return match_response(run, None, upper)
+            after = rows[-1]["id"]
+            await yield_to_capture(req)
 
     return endpoints

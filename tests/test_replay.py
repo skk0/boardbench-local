@@ -79,6 +79,42 @@ class ReplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(last["event"])
         self.assertEqual(b.tx, 0)
 
+    async def test_search_bidirectional_literal_and_scoped_reference(self):
+        b = self.bench
+        path = f"/api/replay/{b.run}/search"
+
+        async def search(term, **params):
+            response = await self.client.get(path, params={"q": term, **params})
+            self.assertEqual(response.status, 200)
+            return await response.json()
+
+        b.log("RX", "UART0", "Boot [A%_]")
+        first_id = b.current_rx_log_id
+        for i in range(260):
+            b.log("RX", "串口", f"sample {i}")
+        b.log("RX", "串口", "\x1b[33mBOOT [a%_]\x1b[0m")
+        last_id = b.current_rx_log_id
+        b.log("RX", "串口", "boot beyond cutoff")
+        b.new("通用串口设备")
+        b.log("RX", "串口", "other session")
+        first = await search("[a%_]", upper=str(last_id))
+        self.assertEqual(first["event"]["id"], first_id)
+        second = await search("boot", after=str(first_id), upper=str(last_id))
+        self.assertEqual(second["event"]["id"], last_id)
+        self.assertEqual(len(second["context"]), 6)
+        self.assertEqual(second["context"][-1]["id"], last_id)
+        prev = await search("BOOT", after=str(last_id), direction="previous")
+        self.assertEqual(prev["event"]["id"], first_id)
+        self.assertIsNone((await search("boot", after=str(last_id), upper=str(last_id)))["event"])
+        self.assertIsNone((await search(f"L{b.current_rx_log_id}"))["event"])
+        self.assertIsNone((await search(f"L{last_id}", upper=str(first_id)))["event"])
+        self.assertEqual((await search(f"L{last_id}"))["event"]["id"], last_id)
+        self.assertEqual((await search("uart0"))["event"]["id"], first_id)
+        self.assertEqual((await search("rx"))["event"]["id"], first_id)
+        for invalid in (" ", "a" * 161, "#L" + "1" * 22):
+            self.assertEqual((await self.client.get(path, params={"q": invalid})).status, 400)
+        self.assertEqual(b.tx, 0)
+
     async def test_invalid_queries_are_local_errors(self):
         path = f"/api/replay/{self.bench.run}/events"
         for params in [

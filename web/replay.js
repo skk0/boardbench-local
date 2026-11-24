@@ -28,6 +28,19 @@ const replayPanel = (() => {
       <div class="rp-paging"><span id="rpSegment"></span><div>
         <button id="rpFirstPage">回到开头</button><button id="rpPrevPage">上一段</button><button id="rpNextPage">下一段</button>
       </div></div>
+      <section class="rp-search" aria-label="查找整场日志">
+        <form id="rpSearchForm" class="rp-toolbar" role="search">
+          <label>查找整场日志<input id="rpQuery" type="search" maxlength="160" placeholder="日志内容、来源、等级或 L 编号"></label>
+          <button id="rpFind" type="submit">查找</button>
+          <button id="rpFindPrev" type="button" hidden>上一处</button>
+        </form>
+        <p id="rpSearchStatus" role="status" hidden></p>
+        <div id="rpMatches" hidden></div>
+        <div class="rp-controls-search">
+          <button id="rpPin" hidden>设为计时起点</button>
+          <span id="rpDelta" hidden></span><button id="rpUnpin" hidden>清除起点</button>
+        </div>
+      </section>
       <section id="rpIssue" class="rp-issue" hidden>
         <div class="rp-issue-head"><div><h3 id="rpIssueTitle">异常上下文</h3>
           <p id="rpIssueNote" role="status"></p></div><button id="rpIssueClose">收起</button></div>
@@ -54,7 +67,7 @@ const replayPanel = (() => {
   let requestNumber = 0,
     visits = 0,
     selected = "",
-    requestedRun = null;
+    requestedRun = null, requestedRef = null;
   let upper,
     origin,
     events = [],
@@ -73,6 +86,7 @@ const replayPanel = (() => {
   let issueRequest = null,
     lastIssue = null,
     issuesFinished = false;
+  const search = createReplaySearch(node, () => ({ run: selected, upper }), eventBlock, pause);
   function clearIssue() {
     if (!issueRequest && lastIssue === null && node("Issue").hidden) return;
     issueRequest?.abort();
@@ -363,6 +377,10 @@ const replayPanel = (() => {
           ? -1
           : 0;
       show(idx, idx < 0 ? segment.start : points[idx], true);
+      if (options.ref && !panel.hidden) {
+        node("Query").focus();
+        search.locate(options.ref);
+      }
       if (
         options.fromPlay &&
         !panel.hidden &&
@@ -422,6 +440,7 @@ const replayPanel = (() => {
     frame = requestAnimationFrame(tick);
   }
   function reset() {
+    search.reset();
     pause();
     clearIssue();
     requestNumber++;
@@ -437,7 +456,7 @@ const replayPanel = (() => {
     node("Player").hidden = true;
     setControls();
   }
-  async function sessions(id = null) {
+  async function sessions(id = null, ref = null) {
     const seq = ++visits;
     try {
       const runs = await get("/api/history");
@@ -471,27 +490,28 @@ const replayPanel = (() => {
       node("Run").value = preferred.id;
       if (selected === String(preferred.id) && events.length && id === null)
         return;
-      selectRun(preferred.id);
+      selectRun(preferred.id, String(preferred.id) === String(id) ? ref : null);
     } catch (e) {
       if (seq === visits && !panel.hidden)
         node("Notice").textContent = "无法读取会话 · " + e.message;
     }
   }
-  function selectRun(id) {
+  function selectRun(id, ref = null) {
     reset();
     selected = String(id);
-    return load(firstCheckpoint());
+    return load(firstCheckpoint(), { ref });
   }
   function activation() {
     if (panel.hidden) {
+      search.cancel();
       visits++;
       pause();
       clearIssue();
       return;
     }
-    const id = requestedRun;
-    requestedRun = null;
-    sessions(id);
+    const id = requestedRun, ref = requestedRef;
+    requestedRun = requestedRef = null;
+    sessions(id, ref);
   }
   node("Run").onchange = () => {
     visits++;
@@ -568,13 +588,14 @@ const replayPanel = (() => {
   setControls();
   if (!panel.hidden) activation();
   return {
-    open(id) {
-      if (!panel.hidden) return sessions(id);
+    open(id, ref) {
+      if (!panel.hidden) return sessions(id, ref);
+      requestedRef = ref;
       requestedRun = id;
       document.querySelector('#tabs [data-tab="replay"]').click();
     },
   };
 })();
-function openReplay(runId) {
-  return replayPanel.open(runId);
+function openReplay(runId, ref = null) {
+  return replayPanel.open(runId, ref);
 }
