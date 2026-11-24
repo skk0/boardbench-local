@@ -40,11 +40,11 @@
 ## 水平仪、回放和按键波形
 
 - 在 **数据曲线 → 板子水平仪** 中缓慢倾斜板子，观察气泡、横滚角和俯仰角。原版 BOX 诊断固件的六轴上报会同时生成三个加速度和三个角速度通道。将板子靠在参考面上可点“以当前姿态置零”，偏离参考面不超过 3° 时显示绿色。运动较快、数据过期或断线时暂停角度显示。零点保存在当前界面，重新连接后恢复。姿态估算依赖静止或缓慢移动时的重力方向。[Adafruit 姿态算法](https://github.com/adafruit/Adafruit_AHRS/blob/master/src/Adafruit_Simple_AHRS.cpp) · [模拟器件倾角测量原理](https://www.analog.com/en/resources/app-notes/an-1057.html)
-- 水平仪下可自选**倾斜挑战**。根据屏幕提示转向三个目标，每关用两次不同的有效读数验证，慢慢转动后停稳即可。
-- 在 **会话回放** 选择一轮记录，或从“历史与报告”点“回放”。可以播放、暂停、变速、逐条查看，或拖动本段的时间轴检查故障前后的事件与元件输出。回放打开时固定日志上界，后续新增事件可通过“刷新记录”载入。长会话分段读取，跨段继续播放；回放只读取本机归档。交互参考了 [PlotJuggler](https://github.com/PlotJuggler/PlotJuggler) 的时间序列浏览。
+- 用 **静置采样** 采集当前连接的五组有效读数，检查加速度模长、各轴波动和陀螺零速输出，结合日志编号复查安装方向、振动或漂移。点击“存入会话日志”可将五组原始值及摘要一并写入本次报告。
+- 在 **会话回放** 选择一轮记录，或从“历史与报告”点“回放”。可以播放、暂停、变速、逐条查看，或拖动本段的时间轴检查故障前后的事件与元件输出。回放打开时固定日志上界，后续新增事件可通过“刷新记录”载入。点“下一处异常”可跨段定位告警或错误并查看前后原文。长会话分段读取，跨段继续播放；回放只读取本机归档。交互参考了 [PlotJuggler](https://github.com/PlotJuggler/PlotJuggler) 的时间序列浏览。
 - 同页点 **导出按键波形** 可生成标准 VCD 文件，在 [GTKWave](https://github.com/gtkwave/gtkwave) 中查看 K0、K1、K2。需要固件上报三个按键的完整电平。低电平表示按下，高电平表示松开；断线、无效读数和采样超时用 `x` 表示。横轴采用电脑收到日志的毫秒时间，适合查看按键先后顺序，机械触点抖动的精密测量需要更高采样率的仪器。
 
-![TCP 回环采样演示倾斜挑战的第二关](docs/tilt-challenge.png)
+![回环测试示例：跨段定位固件告警并核对上下文](docs/session-diagnostics.png)
 
 ## 智能检测
 
@@ -98,4 +98,4 @@ TXT 和 JSON 报告包含导出时的实时判读。需要保留中间状态时�
 
 ## 验证
 
-`python -m unittest discover -s tests -v` 检查串口收发、应答和超时、取消、会话隔离、报告导出以及局域网音频往返。Unix 另外通过实际系统伪终端测试收发。水平仪及倾斜挑战算法使用 `node --test tests/motion.test.cjs` 检查。跨平台打包使用 `python -m pip install pyinstaller`、`python package_app.py` 和 `python tests/smoke_binary.py`。CI 编译 ESP32-S3 配套固件。协议测试和打包检查不能代替实物验收。
+`python -m unittest discover -s tests -v` 检查串口收发、应答和超时、取消、会话隔离、报告导出以及局域网音频往返。Unix 另外通过实际系统伪终端测试收发。姿态计算及静置采样使用 `node --test tests/motion.test.cjs` 检查。跨平台打包使用 `python -m pip install pyinstaller`、`python package_app.py` 和 `python tests/smoke_binary.py`。CI 编译 ESP32-S3 配套固件。协议测试和打包检查不能代替实物验收。

@@ -50,6 +50,35 @@ class ReplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[-1]["id"], first["upper"])
         self.assertEqual(b.tx, 0)
 
+    async def test_next_issue_crosses_pages_and_respects_session_and_cutoff(self):
+        b = self.bench
+        path = f"/api/replay/{b.run}/next-issue"
+        for _ in range(255):
+            b.log("RX", "串口", "info: zero errors")
+        b.log("RX", "串口", "W (143) unknown_driver: dropped sample")
+        b.log("RX", "串口", '{"bb":1,"part":"imu","status":"missing","value":"no ack"}')
+        upper = b.current_rx_log_id
+        b.log("ERROR", "任务", "later")
+        first = await (await self.client.get(path, params={"upper": str(upper)})).json()
+        self.assertEqual(first["event"]["issue_level"], "WARN")
+        self.assertEqual(len(first["context"]), 7)
+        self.assertEqual(first["context"][-1]["id"], upper)
+        second = await (
+            await self.client.get(
+                path, params={"after": str(first["event"]["id"]), "upper": str(upper)}
+            )
+        ).json()
+        self.assertEqual(
+            (second["event"]["id"], second["event"]["issue_level"]), (upper, "ERROR")
+        )
+        last = await (
+            await self.client.get(
+                path, params={"after": str(upper), "upper": str(upper)}
+            )
+        ).json()
+        self.assertIsNone(last["event"])
+        self.assertEqual(b.tx, 0)
+
     async def test_invalid_queries_are_local_errors(self):
         path = f"/api/replay/{self.bench.run}/events"
         for params in [

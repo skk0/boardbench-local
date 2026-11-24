@@ -78,89 +78,158 @@ function motionReading(state, now = Date.now()) {
   const [ax, ay, az, gx, gy, gz] = values;
   const g = Math.hypot(ax, ay, az);
   const speed = Math.hypot(gx, gy, gz);
-  const sample = { g, speed, logId: row.log_id, at };
+  const sample = { g, speed, values, logId: row.log_id, at };
   if (Math.abs(g - 1) > 0.12 || speed > 8)
-    return { ...sample, reason: "运动中 · 请把板子放稳" };
+    return { ...sample, reason: "运动或读数偏离静置范围" };
   return { ...sample, gravity: [ax / g, ay / g, az / g] };
 }
 
-const motionGoals = [
-  { roll: 9, pitch: 0, direction: "上方" },
-  { roll: 0, pitch: -9, direction: "右侧" },
-  { roll: -6, pitch: 6, direction: "左下方" },
-];
+const motionSampleCount = 5;
 
-function startMotionChallenge(reading) {
-  return { stage: 0, streak: 0, lastId: reading.logId, lastAt: reading.at };
+function startMotionSampling(reading, run) {
+  return {
+    run,
+    status: "running",
+    samples: [],
+    lastId: reading.logId,
+    lastAt: reading.at,
+    reference: reading.gravity,
+  };
 }
 
-function advanceMotionChallenge(game, reading, angles) {
-  const goal = motionGoals[game.stage];
-  if (!goal) return;
-  if (!angles) {
-    game.streak = 0;
+function advanceMotionSampling(session, reading) {
+  if (session.status !== "running") return;
+  if (!reading.gravity) {
+    session.status = reading.reason;
     return;
   }
-  if (reading.logId <= game.lastId) return;
-  if (reading.at - game.lastAt > 8000 || reading.at < game.lastAt)
-    game.streak = 0;
-  game.lastId = reading.logId;
-  game.lastAt = reading.at;
-  if (
-    angles.roll === null ||
-    Math.abs(angles.roll - goal.roll) > 2 ||
-    Math.abs(angles.pitch - goal.pitch) > 2
-  ) {
-    game.streak = 0;
+  if (reading.logId <= session.lastId) return;
+  if (reading.at - session.lastAt > 8000 || reading.at < session.lastAt) {
+    session.status = "采样时间不连续";
     return;
   }
-  if (++game.streak >= 2) {
-    game.stage++;
-    game.streak = 0;
+  // Compare gravity directions to catch a slow change of pose between reports.
+  const dot = session.reference.reduce(
+    (sum, axis, i) => sum + axis * reading.gravity[i],
+    0,
+  );
+  if (dot < Math.cos((3 * Math.PI) / 180)) {
+    session.status = "采样期间姿态变化超过 3°";
+    return;
   }
+  session.lastAt = reading.at;
+  session.lastId = reading.logId;
+  session.samples.push(reading);
+  if (session.samples.length === motionSampleCount) session.status = "complete";
 }
 
-function renderMotionChallenge(host, game, reading) {
-  const goal = game && motionGoals[game.stage];
-  const finished = game && !goal;
-  const play = host.querySelector(".motion-play");
-  play.textContent = finished ? "再玩一次" : goal ? "结束挑战" : "开始挑战";
-  play.disabled = !goal && !reading.gravity;
-  const marker = host.querySelector(".motion-goal");
-  marker.hidden = !goal;
-  const note = host.querySelector(".motion-game-note");
-  note.hidden = !game;
-  let text = "";
-  if (goal) {
-    const pitch = (goal.pitch * Math.PI) / 180;
-    const roll = (goal.roll * Math.PI) / 180;
-    const coords = motionAngles([
-      -Math.sin(pitch),
-      Math.cos(pitch) * Math.sin(roll),
-      Math.cos(pitch) * Math.cos(roll),
-    ]);
-    marker.style.left = 50 + coords.bubbleX * 42 + "%";
-    marker.style.top = 50 + coords.bubbleY * 42 + "%";
-    text =
-      "第 " +
-      (game.stage + 1) +
-      " / 3 关 · 气泡移向" +
-      goal.direction +
-      "金色圈。横滚 " +
-      goal.roll +
-      "°，俯仰 " +
-      goal.pitch +
-      "°，两轴各允许 ±2°。已保持 " +
-      game.streak +
-      " / 2 次采样。";
-  } else if (finished) {
-    text = "三关完成 · 三个目标均已收到连续两次达标采样。";
+function motionStatistics(samples) {
+  if (samples.length !== motionSampleCount) return null;
+  const mean = (values) => values.reduce((a, b) => a + b, 0) / values.length;
+  const range = (values) => Math.max(...values) - Math.min(...values);
+  const magnitude = samples.map((s) => s.g);
+  const axes = motionLabels.map((_, i) => samples.map((s) => s.values[i]));
+  return {
+    normMean: mean(magnitude),
+    normRange: range(magnitude),
+    axisRange: axes.slice(0, 3).map(range),
+    gyroMean: axes.slice(3).map(mean),
+  };
+}
+
+function motionSampleFields(session) {
+  const stats = motionStatistics(session.samples);
+  const triple = (v) => v.map((n) => n.toFixed(3)).join(" / ");
+  const stamp = (s) =>
+    new Date(s.at).toLocaleString("zh-CN", {
+      hour12: false,
+      fractionalSecondDigits: 3,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  return [
+    ["加速度模长均值", stats.normMean.toFixed(3) + " g"],
+    ["模长峰峰值", stats.normRange.toFixed(3) + " g"],
+    ["加速度峰峰值（X / Y / Z）", triple(stats.axisRange) + " g"],
+    ["陀螺仪均值（X / Y / Z）", triple(stats.gyroMean) + " °/s"],
+    [
+      "采样时段（本地）",
+      stamp(session.samples[0]) + " – " + stamp(session.samples[4]),
+    ],
+  ];
+}
+
+function motionSampleNote(session) {
+  const lines = [
+    "六轴静置采样 · 5 组",
+    ...motionSampleFields(session).map(([k, v]) => k + "：" + v),
+  ];
+  lines.push("UTC 采样时间 · 日志编号 · AX / AY / AZ (g) · GX / GY / GZ (°/s)");
+  for (const sample of session.samples) {
+    lines.push(
+      new Date(sample.at).toISOString() +
+        " · L" +
+        sample.logId +
+        " · " +
+        sample.values.join(" / "),
+    );
   }
-  if (note.textContent !== text) note.textContent = text;
+  return lines.join("\n");
+}
+
+function renderMotionSampling(host, session, reading, run) {
+  const action = host.querySelector(".motion-collect");
+  const running = session?.status === "running";
+  action.textContent = running ? "取消采样" : "采集 5 组";
+  action.disabled = !running && !reading.gravity;
+  const note = host.querySelector(".motion-sampling-note");
+  let message =
+    "放稳后开始。采样窗口为 0.88–1.12 g、角速度 ≤8 °/s，姿态变化 ≤3°。";
+  if (session) {
+    const n = session.samples.length;
+    if (running) message = "保持板子静止 · 已采集 " + n + " / 5 组";
+    else if (session.status === "complete") message = "已采集 5 / 5 组";
+    else
+      message = "采样中断 · " + session.status + " · 已记录 " + n + " / 5 组";
+  }
+  if (note.textContent !== message) note.textContent = message;
+  const result = host.querySelector(".motion-sampling-result");
+  const save = host.querySelector(".motion-save");
+  save.hidden = session?.status !== "complete";
+  save.disabled =
+    session?.run !== run || Boolean(session?.saving || session?.saved);
+  save.textContent = session?.saved
+    ? "已存入会话日志"
+    : session?.saving
+      ? "正在保存…"
+      : "存入会话日志";
+  if (session?.status !== "complete") {
+    result.hidden = true;
+    return;
+  }
+  if (!result.hidden && result.dataset.final === String(session.lastId)) return;
+  result.hidden = false;
+  result.dataset.final = String(session.lastId);
+  result.replaceChildren();
+  for (const [name, value] of motionSampleFields(session)) {
+    result.append(el("dt", name), el("dd", value));
+  }
+  result.append(el("dt", "原始日志"));
+  const refs = el("dd");
+  refs.className = "motion-sampling-refs";
+  for (const sample of session.samples) {
+    const ref = "L" + sample.logId;
+    refs.append(button(ref, () => showEvidence({ run }, ref)));
+  }
+  result.append(refs);
 }
 
 const motionView = (() => {
-  let host, current, connectionKey, zero, game;
+  let host, current, connectionKey, zero, sampling;
 
   function show(state) {
     current = state;
@@ -174,7 +243,8 @@ const motionView = (() => {
       : null;
     if (nextKey !== connectionKey) {
       zero = null;
-      game = null;
+      if (sampling?.status === "running") sampling.status = "设备连接发生变化";
+      else if (sampling?.status === "complete") sampling = null;
     }
     connectionKey = nextKey;
 
@@ -185,7 +255,7 @@ const motionView = (() => {
         <div class="motion-top"><h2>板子水平仪</h2><span class="motion-status" role="status"></span></div>
         <div class="motion-instrument">
           <div class="motion-dial" aria-hidden="true">
-            <span class="motion-target"></span><span class="motion-goal" hidden></span><span class="motion-bubble" hidden></span>
+            <span class="motion-ring"></span><span class="motion-bubble" hidden></span>
             <span class="motion-x">+X</span><span class="motion-y">+Y</span>
           </div>
           <dl class="motion-values">
@@ -196,8 +266,8 @@ const motionView = (() => {
         </div>
         <div class="motion-actions"><button type="button">以当前姿态置零</button><button type="button">恢复默认零点</button></div>
         <p class="motion-help"></p>
-        <div class="motion-game"><div class="motion-game-actions"><strong>倾斜挑战</strong><button type="button" class="motion-play">开始挑战</button></div>
-          <p class="motion-game-note" role="status" hidden></p></div>`;
+        <div class="motion-sampling"><div class="motion-actions"><strong>静置采样</strong><button type="button" class="motion-collect">采集 5 组</button></div>
+          <p class="motion-sampling-note" role="status"></p><dl class="motion-sampling-result" hidden></dl><button type="button" class="motion-save" hidden>存入会话日志</button></div>`;
       const [capture, reset] = host.querySelectorAll("button");
       capture.onclick = () => {
         const next = motionReading(current);
@@ -208,28 +278,55 @@ const motionView = (() => {
         zero = null;
         show(current);
       };
-      host.querySelector(".motion-play").onclick = () => {
-        if (game && motionGoals[game.stage]) {
-          game = null;
+      host.querySelector(".motion-save").onclick = handle(async () => {
+        const completed = sampling;
+        if (
+          completed?.status !== "complete" ||
+          completed.saving ||
+          completed.saved ||
+          completed.run !== current?.run
+        )
+          return;
+        completed.saving = true;
+        show(current);
+        try {
+          await get("/api/note", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-BoardBench": token,
+            },
+            body: JSON.stringify({
+              run: completed.run,
+              text: motionSampleNote(completed),
+            }),
+          });
+          completed.saved = true;
+        } finally {
+          completed.saving = false;
+          show(current);
+        }
+      });
+      host.querySelector(".motion-collect").onclick = () => {
+        if (sampling?.status === "running") {
+          sampling.status = "已取消";
         } else {
           const next = motionReading(current);
-          if (next.gravity) game = startMotionChallenge(next);
+          if (next.gravity) sampling = startMotionSampling(next, current.run);
         }
         show(current);
       };
     }
 
-    if (host.closest(".tab")?.hidden) {
-      if (game) game.streak = 0;
-      return;
-    }
     const reading = motionReading(state);
+    if (sampling) advanceMotionSampling(sampling, reading);
+    if (host.closest(".tab")?.hidden) return;
     const angles = reading.gravity && motionAngles(reading.gravity, zero);
-    const onTarget = angles && angles.tilt <= 3;
-    const status = reading.reason || (onTarget ? "已进入 ±3°" : "调整倾角");
+    const level = angles && angles.tilt <= 3;
+    const status = reading.reason || (level ? "水平范围 ±3°" : "已测得倾角");
     const statusNode = host.querySelector(".motion-status");
     if (statusNode.textContent !== status) statusNode.textContent = status;
-    host.dataset.signal = onTarget ? "level" : angles ? "tilt" : "idle";
+    host.dataset.signal = level ? "level" : angles ? "tilt" : "idle";
     const formatAngle = (value) =>
       value == null ? "—" : Number(value.toFixed(1)) + "°";
     host.querySelector(".motion-roll").textContent = formatAngle(angles?.roll);
@@ -243,11 +340,9 @@ const motionView = (() => {
       bubble.style.top = 50 + angles.bubbleY * 42 + "%";
     }
     const [capture, reset] = host.querySelectorAll("button");
-    if (game) advanceMotionChallenge(game, reading, angles);
-    renderMotionChallenge(host, game, reading);
-    const playing = Boolean(game && motionGoals[game.stage]);
-    capture.disabled = !reading.gravity || playing;
-    reset.disabled = !zero || playing;
+    renderMotionSampling(host, sampling, reading, state?.run);
+    capture.disabled = !reading.gravity;
+    reset.disabled = !zero;
     host.querySelector(".motion-source").textContent = reading.logId
       ? reading.g.toFixed(2) +
         " g · " +

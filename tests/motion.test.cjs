@@ -103,35 +103,46 @@ test("dynamic, stale, missing, disconnected and unparseable samples yield no ang
     assert.equal(panel.motionReading(s, time).gravity, undefined);
 });
 
-test("challenge only counts fresh consecutive stable samples and completes three targets", () => {
-  const game = panel.startMotionChallenge({ logId: 10, at: time });
-  const update = (id, roll, pitch, elapsed = id * 100) =>
-    panel.advanceMotionChallenge(
-      game,
-      { logId: id, at: time + elapsed },
-      roll == null ? null : { roll, pitch },
-    );
-  update(10, 9, 0);
-  assert.equal(game.streak, 0);
-  update(11, 9, 0);
-  update(11, 9, 0);
-  assert.equal(game.streak, 1);
-  update(12, null, null);
-  assert.equal(game.streak, 0);
-  update(13, 8, 0);
-  update(14, 5, 0);
-  assert.equal(game.streak, 0);
-  update(15, 8, 0);
-  update(16, 9, 0, 12000);
-  assert.equal(game.stage, 0);
-  update(17, 9, 0, 13000);
-  assert.equal(game.stage, 1);
-  update(18, 0, -9, 14000);
-  update(19, 0, -9, 15000);
-  assert.equal(game.stage, 2);
-  update(20, -6, 6, 16000);
-  update(21, -6, 6, 17000);
-  assert.equal(game.stage, 3);
-  update(22, -6, 6, 18000);
-  assert.equal(game.stage, 3);
+function observed(id, z, gyro, at = time + id * 100) {
+  const values = [0, 0, z, ...gyro];
+  return { logId: id, at, gravity: [0, 0, 1], g: z, values };
+}
+test("static capture uses five distinct subsequent observations and preserves evidence", () => {
+  const first = observed(10, 1, [0, 0, 0]);
+  const session = panel.startMotionSampling(first);
+  panel.advanceMotionSampling(session, first);
+  for (let i = 1; i <= 5; i++) {
+    const next = observed(10 + i, 1 + i * 0.001, [i, -i, 0.5]);
+    panel.advanceMotionSampling(session, next);
+    panel.advanceMotionSampling(session, next);
+  }
+  assert.equal(session.status, "complete");
+  assert.equal(session.samples.map((s) => s.logId).join(","), "11,12,13,14,15");
+  const stats = panel.motionStatistics(session.samples);
+  near(stats.normMean, 1.003);
+  near(stats.normRange, 0.004);
+  near(stats.axisRange[2], 0.004);
+  near(stats.gyroMean[0], 3);
+  near(stats.gyroMean[1], -3);
+  near(stats.gyroMean[2], 0.5);
+  panel.advanceMotionSampling(session, observed(20, 1, [0, 0, 0]));
+  assert.equal(session.samples.length, 5);
+});
+test("motion, changed gravity direction, stale timestamp or missing data interrupts without calculating stats", () => {
+  for (const next of [
+    { reason: "运动或读数偏离静置范围" },
+    { reason: "六轴读数已过期" },
+    { reason: "连接设备后查看姿态" },
+    { ...observed(12, 1, [0, 0, 0]), gravity: [0, 1, 0] },
+    observed(12, 1, [0, 0, 0], time + 10000),
+  ]) {
+    const session = panel.startMotionSampling(observed(10, 1, [0, 0, 0]));
+    panel.advanceMotionSampling(session, observed(11, 1, [0, 0, 0]));
+    panel.advanceMotionSampling(session, next);
+    assert.notEqual(session.status, "running");
+    assert.equal(session.samples.length, 1);
+    assert.equal(panel.motionStatistics(session.samples), null);
+    panel.advanceMotionSampling(session, observed(13, 1, [0, 0, 0]));
+    assert.equal(session.samples.length, 1);
+  }
 });

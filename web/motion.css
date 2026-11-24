@@ -67,7 +67,7 @@
     radial-gradient(circle, #26414b, #1e313b 78%);
   box-shadow: inset 0 0 0 4px #25343d;
 }
-.motion-target,
+.motion-ring,
 .motion-bubble {
   position: absolute;
   top: 50%;
@@ -76,7 +76,7 @@
   border-radius: 50%;
   aspect-ratio: 1;
 }
-.motion-target {
+.motion-ring {
   width: 16.8%;
   border: 1px solid #9bb8bf;
 }
@@ -140,36 +140,43 @@
     transition: none;
   }
 }
-.motion-goal {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  aspect-ratio: 1;
-  width: 13%;
-  border-radius: 50%;
-  border: 2px solid #ffca6a;
-  box-shadow: 0 0 0 2px #293039;
-}
-.motion-game {
-  margin-top: 10px;
-  padding-top: 10px;
+
+.motion-sampling {
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.motion-game-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.motion-game-actions strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-.motion-game-actions button {
-  min-height: 29px;
-  padding: 3px 10px;
-}
-.motion-game-note {
-  margin: 6px 0 0;
-  font-size: 12px;
+.motion-sampling-note {
+  margin: 7px 0 0;
   color: var(--sub);
+  font-size: 12px;
+}
+.motion-sampling-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 12px 0 0;
+}
+.motion-sampling-result dt {
+  color: var(--sub);
+  font-size: 12px;
+}
+.motion-sampling-result dd {
+  margin: 0;
+  font: 12px var(--mono);
+  overflow-wrap: anywhere;
+}
+.motion-sampling-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.motion-sampling-refs button {
+  font: 11px var(--mono);
+  min-height: 24px;
+  padding: 2px 5px;
+  color: var(--active);
+}
+.motion-save {
+  margin-top: 10px;
 }

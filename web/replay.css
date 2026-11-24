@@ -165,3 +165,35 @@
     padding: 14px;
   }
 }
+
+.rp-issue {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.rp-issue-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+}
+.rp-issue-head p {
+  margin: 3px 0 8px;
+}
+#rpIssueRows {
+  max-height: 320px;
+  overflow: auto;
+}
+.rp-issue-hit {
+  border-left: 3px solid var(--accent);
+  padding-left: 7px;
+  background: var(--soft);
+}
+.rp-warn strong {
+  color: #7e4d00;
+}
+:root[data-theme="dark"] .rp-warn strong {
+  color: #ffce79;
+}

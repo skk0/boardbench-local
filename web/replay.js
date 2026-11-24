@@ -22,11 +22,17 @@ const replayPanel = (() => {
             <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
           </select></label>
           <button id="rpPrevEvent">上一条</button><button id="rpNextEvent">下一条</button>
+          <button id="rpNextIssue" aria-controls="rpIssue">下一处异常</button>
         </div>
       </div>
       <div class="rp-paging"><span id="rpSegment"></span><div>
         <button id="rpFirstPage">回到开头</button><button id="rpPrevPage">上一段</button><button id="rpNextPage">下一段</button>
       </div></div>
+      <section id="rpIssue" class="rp-issue" hidden>
+        <div class="rp-issue-head"><div><h3 id="rpIssueTitle">异常上下文</h3>
+          <p id="rpIssueNote" role="status"></p></div><button id="rpIssueClose">收起</button></div>
+        <div id="rpIssueRows"></div>
+      </section>
       <div class="rp-columns"><section><h3>元件最后上报</h3><div id="rpParts"></div></section>
         <section><h3>光标前的事件</h3><div id="rpLog"></div></section></div>
     </div>`;
@@ -64,6 +70,74 @@ const replayPanel = (() => {
     busy = false;
   let aborter = null,
     exportToken = 0;
+  let issueRequest = null,
+    lastIssue = null,
+    issuesFinished = false;
+  function clearIssue() {
+    if (!issueRequest && lastIssue === null && node("Issue").hidden) return;
+    issueRequest?.abort();
+    issueRequest = lastIssue = null;
+    issuesFinished = false;
+    node("Issue").hidden = true;
+    node("IssueRows").replaceChildren();
+    node("NextIssue").disabled = busy || !events.length;
+  }
+  async function nextIssue() {
+    if (busy || issueRequest || issuesFinished || !events.length) return;
+    pause();
+    const after = lastIssue ?? events[cursor]?.id ?? segment.after;
+    const controller = (issueRequest = new AbortController());
+    node("Issue").hidden = false;
+    node("IssueTitle").textContent = "异常上下文";
+    node("IssueNote").textContent = "正在查找 L" + after + " 之后的错误与告警…";
+    setControls();
+    try {
+      const query = new URLSearchParams({ after, upper });
+      const found = await get(
+        "/api/replay/" + encodeURIComponent(selected) + "/next-issue?" + query,
+        {
+          signal: controller.signal,
+        },
+      );
+      if (controller !== issueRequest) return;
+      if (!found.event) {
+        issuesFinished = true;
+        node("IssueNote").textContent =
+          "已查到本次回放的末尾，L" + after + " 后没有其他错误或告警。";
+        return;
+      }
+      lastIssue = found.event.id;
+      node("IssueTitle").textContent =
+        (found.event.issue_level === "WARN" ? "告警" : "错误") +
+        " · L" +
+        lastIssue;
+      const from = events[cursor]?.id ?? segment.after;
+      node("IssueNote").textContent =
+        "命中时间 " + stamp(found.event.at) + " · 回放光标停在 L" + from;
+      const context = (found.context || [found.event]).map((event) => {
+        const line = eventBlock(event, false);
+        if (event.id === lastIssue) line.classList.add("rp-issue-hit");
+        return line;
+      });
+      const rows = node("IssueRows");
+      rows.replaceChildren(...context);
+      const hit = rows.querySelector(".rp-issue-hit");
+      if (hit) {
+        rows.scrollTop +=
+          hit.getBoundingClientRect().top -
+          rows.getBoundingClientRect().top -
+          Math.max(0, (rows.clientHeight - hit.offsetHeight) / 2);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted)
+        node("IssueNote").textContent = "查找失败，可重试 · " + error.message;
+    } finally {
+      if (controller === issueRequest) {
+        issueRequest = null;
+        setControls();
+      }
+    }
+  }
   function elapsed(ms) {
     const seconds = Math.floor(Math.max(0, ms) / 1000);
     return [
@@ -85,6 +159,8 @@ const replayPanel = (() => {
   function setControls() {
     const enabled = !busy && events.length > 0;
     node("Play").disabled = !enabled;
+    node("NextIssue").disabled =
+      !enabled || Boolean(issueRequest) || issuesFinished;
     node("Seek").disabled = !enabled || points.at(-1) === segment?.start;
     node("NextEvent").disabled =
       !enabled || (cursor >= events.length - 1 && !more);
@@ -130,17 +206,13 @@ const replayPanel = (() => {
         : event.message,
     );
     const time = el("small", "L" + event.id + " · " + stamp(event.at));
-    if (
-      event.level === "ERROR" ||
-      ["设备报错", "固件报错", "无应答", "error", "missing"].includes(
-        event.status,
-      )
-    )
-      line.classList.add("rp-fault");
+    if (event.issue_level === "ERROR") line.classList.add("rp-fault");
+    if (event.issue_level === "WARN") line.classList.add("rp-warn");
     line.append(title, time, detail);
     return line;
   }
   function show(index, time, force = false) {
+    if (position !== time || cursor !== index || force) clearIssue();
     position = time;
     node("Seek").value = time - segment.start;
     node("Seek").setAttribute("aria-valuetext", stamp(time));
@@ -200,7 +272,7 @@ const replayPanel = (() => {
     ctx.scale(scale, scale);
     const bins = Math.max(10, Math.min(180, Math.floor(width / 5)));
     const counts = new Uint16Array(bins),
-      faults = new Set();
+      issues = new Uint8Array(bins);
     const span = Math.max(1, points.at(-1) - segment.start);
     points.forEach((t, i) => {
       const bin = Math.min(
@@ -208,24 +280,23 @@ const replayPanel = (() => {
         Math.floor(((t - segment.start) / span) * bins),
       );
       counts[bin]++;
-      if (
-        events[i].level === "ERROR" ||
-        ["设备报错", "固件报错", "无应答", "error", "missing"].includes(
-          events[i].status,
-        )
-      )
-        faults.add(bin);
+      if (events[i].issue_level === "ERROR") issues[bin] = 2;
+      else if (events[i].issue_level === "WARN" && !issues[bin])
+        issues[bin] = 1;
     });
     const max = Math.max(...counts, 1);
     for (let i = 0; i < bins; i++) {
       const h = counts[i]
         ? 5 + (Math.log1p(counts[i]) / Math.log1p(max)) * 32
         : 1;
-      ctx.fillStyle = faults.has(i)
-        ? "#ff8e82"
-        : counts[i]
-          ? "#86c8ff"
-          : "#526277";
+      ctx.fillStyle =
+        issues[bin] === 2
+          ? "#ff8e82"
+          : issues[bin] === 1
+            ? "#ffcf79"
+            : counts[i]
+              ? "#86c8ff"
+              : "#526277";
       ctx.fillRect(
         (i * width) / bins,
         height - h,
@@ -235,6 +306,7 @@ const replayPanel = (() => {
     }
   }
   async function load(checkpoint, options = {}) {
+    clearIssue();
     const request = ++requestNumber,
       run = selected;
     aborter?.abort();
@@ -279,7 +351,7 @@ const replayPanel = (() => {
       }
       node("Player").hidden = false;
       node("Notice").textContent =
-        "按记录时间回放 · 蓝色为事件分布，红色为异常";
+        "按记录时间回放 · 蓝色为普通事件，黄色为告警，红色为错误";
       node("Seek").max = points.at(-1) - segment.start;
       node("First").textContent = stamp(segment.start);
       node("Last").textContent = stamp(points.at(-1));
@@ -351,6 +423,7 @@ const replayPanel = (() => {
   }
   function reset() {
     pause();
+    clearIssue();
     requestNumber++;
     exportToken++;
     aborter?.abort();
@@ -413,6 +486,7 @@ const replayPanel = (() => {
     if (panel.hidden) {
       visits++;
       pause();
+      clearIssue();
       return;
     }
     const id = requestedRun;
@@ -452,6 +526,11 @@ const replayPanel = (() => {
   };
   node("PrevPage").onclick = () => load(checkpoints.at(-2), { rewind: true });
   node("NextPage").onclick = () => next();
+  node("NextIssue").onclick = nextIssue;
+  node("IssueClose").onclick = () => {
+    clearIssue();
+    node("NextIssue").focus();
+  };
   node("Vcd").onclick = async () => {
     const run = selected,
       version = ++exportToken;
