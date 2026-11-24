@@ -320,7 +320,7 @@ function plots() {
     $("charts").append(box);
     const ctx = c.getContext("2d");
     ctx.strokeStyle =
-      document.documentElement.dataset.theme === "dark" ? "#ffa96e" : "#a64d1d";
+      document.documentElement.dataset.theme === "dark" ? "#78baff" : "#0866bb";
     ctx.lineWidth = 2;
     ctx.beginPath();
     vs.forEach((v, i) => {
@@ -551,7 +551,7 @@ $("workdate").textContent = new Intl.DateTimeFormat("zh-CN", {
   weekday: "short",
 }).format(new Date());
 const storedTheme = localStorage.getItem("boardbench.theme");
-document.documentElement.dataset.theme = storedTheme || "light";
+document.documentElement.dataset.theme = storedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 bind("theme", () => {
   const theme =
     document.documentElement.dataset.theme === "dark" ? "light" : "dark";

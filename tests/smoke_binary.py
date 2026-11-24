@@ -5,14 +5,21 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from urllib.request import urlopen
 
-binary = str(
-    Path("dist", "BoardBench.exe" if os.name == "nt" else "BoardBench").resolve()
-)
-subprocess.run([binary, "--esp-worker", "version"], check=True, timeout=60)
+if sys.platform == "darwin":
+    binary = str(Path("dist/BoardBench.app/Contents/MacOS/BoardBench").resolve())
+else:
+    binary = str(Path("dist", "BoardBench.exe" if os.name == "nt" else "BoardBench").resolve())
+version = subprocess.run([binary, "--esp-worker", "version"], capture_output=True, check=True, timeout=60)
+assert b"4." in version.stdout, "bundled ESP worker did not return its output"
+if sys.platform in ("darwin", "win32"):
+    with tempfile.TemporaryDirectory() as temp:
+        subprocess.run([binary, "--data-dir", temp, "--port", "0", "--desktop-smoke"],
+                       check=True, timeout=110)
 with socket.socket() as s:
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]

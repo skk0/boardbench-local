@@ -25,7 +25,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BoardBench-${{ runner.os }}-${{ runner.arch }}
-          path: dist/BoardBench*
+          if-no-files-found: error
+          path: |
+            dist/BoardBench-*.zip
+            dist/BoardBench.exe
   firmware:
     runs-on: ubuntu-latest
     steps:

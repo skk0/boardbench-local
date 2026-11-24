@@ -1,17 +1,17 @@
 # BoardBench 板卡测试台
 
-在 macOS 或 Windows 上用浏览器控制本机串口，执行板卡验收、观察传感器曲线并导出带原始收发记录的报告。控制页默认在 `http://127.0.0.1:8765`。USB 和串口检测在本机完成，小智回声测试可以临时开启独立的局域网监听。
+在 macOS 或 Windows 桌面窗口中控制本机串口，执行板卡验收、观察传感器曲线并导出带原始收发记录的报告。控制页默认在 `http://127.0.0.1:8765`。USB 和串口检测在本机完成，小智回声测试可以临时开启独立的局域网监听。
 
 ![BoardBench 本地控制面板，通过 TCP 回环夹具验证通信与日志](docs/workbench.png)
 
-截图使用本机 TCP 回环夹具。右上角可切换明暗主题，字体、图标和设备示意图随软件离线提供。
+截图使用本机 TCP 回环夹具。右上角可切换明暗主题，使用系统字体，图标和设备示意图随软件离线提供。
 
 ## 启动
 
-- 从 [Releases](../../releases) 下载对应系统的压缩包并解压，即可运行独立程序。
-- 源码运行需要 Python 3.9 或以上。macOS 双击 `macOS.command`，Windows 双击 `Windows.cmd`。首次运行创建虚拟环境并下载依赖，以后可离线启动。
-- 也可手动运行 `python -m pip install -r requirements.txt` 和 `python app.py`。端口冲突时使用 `python app.py --port 8766`。
-- GitHub Actions 中成功的 **Desktop and firmware** 运行会提供对应系统、CPU 架构的独立可执行文件。下载并解压，macOS 如缺少执行位可执行 `chmod +x BoardBench`。构建产物为未签名的控制台应用。
+- 从 [Releases](../../releases) 下载桌面包。Mac（Apple Silicon）解压得到 `BoardBench.app`，可拖入“应用程序”后双击打开。Windows x64 解压后双击 `BoardBench.exe`。两者都使用系统窗口，关闭窗口即结束本次采集并释放串口。无需安装 Python。
+- Mac 使用系统 WebKit，Windows 使用 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。若 Windows 缺少运行时，请安装微软提供的运行时。发布包未做 Apple 开发者公证或 Windows 商业代码签名。
+- 从源码运行推荐 Python 3.12。macOS 双击 `macOS.command`，Windows 双击 `Windows.cmd`。脚本首次创建虚拟环境并安装依赖。也可运行 `python -m pip install -r requirements.txt` 和 `python app.py`。
+- `--browser` 在系统浏览器打开，`--no-browser` 仅启动本机服务。串口和日志均由本机进程处理。默认端口已占用时可关闭原实例，或使用 `--port 8766`。应用内支持导入配置、导出诊断报告及切换明暗外观。
 - 用 USB **数据线**连接，选择端口、波特率、串口格式。Windows 如无法枚举，请检查设备管理器和板载 USB 转串口芯片的驱动。关闭其他占用端口的串口监视器。
 
 面板支持 USB 串口、TCP 客户端和 UDP 对端。网络板填设备地址和固件实际监听的端口，三种连接方式共享终端、命令测试、曲线和日志。UDP 启用后日志会显示本机接收端口，首次收包可确认对端有响应。

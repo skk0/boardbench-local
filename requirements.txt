@@ -2,3 +2,4 @@ aiohttp>=3.10,<4
 esptool>=4.8,<5
 pyserial==3.5
 keyring>=24,<26
+pywebview>=6.1,<7; sys_platform == "darwin" or sys_platform == "win32"

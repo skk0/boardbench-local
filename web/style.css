@@ -1,40 +1,34 @@
 @import url("./icons.css");
-@font-face {
-  font-family: Barlow;
-  src: url("./assets/barlow.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 600;
-}
 :root {
   color-scheme: light;
-  --paper: #f3f4f6;
+  --paper: #f5f5f7;
   --surface: #fff;
-  --soft: #f5f6f8;
-  --ink: #1b2531;
-  --sub: #526070;
-  --line: #d6dbe1;
-  --strong: #aeb7c2;
-  --accent: #ed8c48;
-  --active: #ad4a16;
-  --rail: #1b2531;
-  --rail-2: #26323f;
-  --radius: 12px;
+  --soft: #f1f2f5;
+  --ink: #1d1d20;
+  --sub: #595b64;
+  --line: #dfe0e5;
+  --strong: #acafb8;
+  --accent: #0878db;
+  --active: #0064bc;
+  --rail: #eceef2;
+  --rail-2: #dce0e7;
+  --radius: 14px;
   --mono: "IBM Plex Mono", Menlo, Consolas, monospace;
-  --body: "Instrument Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --metric: Barlow, "Arial Narrow", var(--mono);
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --metric: var(--body);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #151b23;
-  --surface: #222b35;
-  --soft: #28333f;
-  --ink: #f0f2f3;
-  --sub: #afbbc8;
-  --line: #3d4956;
-  --strong: #69798a;
-  --active: #ffac75;
-  --rail: #131a22;
-  --rail-2: #222d39;
+  --paper: #1b1c20;
+  --surface: #25262b;
+  --soft: #2e3036;
+  --ink: #f5f5f7;
+  --sub: #b7bac4;
+  --line: #3d3f46;
+  --strong: #747781;
+  --active: #76baff;
+  --rail: #24252b;
+  --rail-2: #373942;
 }
 * {
   box-sizing: border-box;
@@ -145,17 +139,17 @@ input:focus-visible,
 select:focus-visible,
 summary:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #ed965a;
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 .primary {
-  background: #e99457;
-  border-color: #e99457;
-  color: #211a16;
+  background: #0875d7;
+  border-color: #0875d7;
+  color: #fff;
 }
 .primary:hover {
-  background: #f5aa70;
-  border-color: #e69251;
+  background: #0069c5;
+  border-color: #0068c4;
 }
 .ico {
   font: normal 19px/1 board-icons;
@@ -169,36 +163,31 @@ textarea:focus-visible {
   z-index: 3;
   width: 196px;
   background: var(--rail);
-  color: #d8dee5;
+  color: var(--ink);
   display: flex;
   flex-direction: column;
-  padding: 23px 14px 15px;
+  padding: 18px 12px 15px;
+  border-right: 1px solid var(--line);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 5px 46px;
+  margin: 0 4px 32px;
 }
 .brand b {
-  font: 600 29px/0.95 var(--metric);
+  font: 650 21px/1 var(--body);
   letter-spacing: -0.7px;
-  color: #f8fafb;
+  color: var(--ink);
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #1a222b;
-  font: 600 27px var(--metric);
-  box-shadow: inset 0 -3px 0 #8b4c2b;
+  width: 41px;
+  height: 41px;
+  object-fit: contain;
 }
 .rail-label {
   font: 12px var(--body);
-  color: #a7b3c1;
+  color: var(--sub);
   margin: 0 11px 12px;
 }
 .rail nav {
@@ -209,23 +198,26 @@ textarea:focus-visible {
   border: 0;
   justify-content: flex-start;
   background: transparent;
-  color: #c5ced8;
+  color: var(--ink);
   padding: 11px 12px;
   min-height: 44px;
   gap: 12px;
   font-size: 14px;
 }
 .rail button:hover {
-  background: #32414f;
-  color: white;
+  background: var(--rail-2);
+  color: var(--ink);
 }
 .rail button.active {
-  background: #35404c;
-  color: #fff;
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--rail-2);
+  color: var(--ink);
+  box-shadow: none;
+}
+.rail button .ico {
+  color: var(--active);
 }
 .rail button.active .ico {
-  color: #ffa668;
+  color: var(--active);
 }
 .rail-bottom {
   margin-top: auto;
@@ -234,7 +226,7 @@ textarea:focus-visible {
   width: 100%;
 }
 .host {
-  border-top: 1px solid #43515e;
+  border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -244,7 +236,7 @@ textarea:focus-visible {
 }
 .host small {
   display: block;
-  color: #acbac9;
+  color: var(--sub);
   font: 11px var(--mono);
   margin-top: 3px;
 }
@@ -334,16 +326,16 @@ main {
   isolation: isolate;
   display: flex;
   align-items: center;
-  min-height: 130px;
+  min-height: 124px;
   padding: 20px 26px;
-  color: #f2f4f4;
-  background-color: #273541;
-  background-image:
-    radial-gradient(#64747c66 0.8px, transparent 0.9px),
-    linear-gradient(105deg, #23303c 10%, #2b3a46 60%, #374952);
-  background-size:
-    12px 12px,
-    100% 100%;
+  color: var(--ink);
+  background: radial-gradient(ellipse at 85% 110%, #acd9e494, transparent 48%),
+    linear-gradient(112deg, #f8faff 6%, #e9f0fc 55%, #dce5f8);
+  border-bottom: 1px solid var(--line);
+}
+:root[data-theme="dark"] .instrument {
+  background: radial-gradient(ellipse at 80% 100%, #314b5a, transparent 52%),
+    linear-gradient(110deg, #252934, #293747);
 }
 .instrument-title {
   position: relative;
@@ -357,23 +349,23 @@ main {
 }
 .instrument p {
   margin: 0;
-  color: #c1ced6;
+  color: var(--sub);
   font-size: 13px;
 }
 .link-label {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #ffbc88;
+  color: var(--sub);
   font-size: 12px;
   font-weight: 600;
 }
 .lamp {
-  background: #f4a366;
-  box-shadow: 0 0 0 3px #d1874a28;
+  background: #8c919c;
+  box-shadow: 0 0 0 3px #8c919c20;
 }
 .connected .link-label {
-  color: #99e5be;
+  color: var(--active);
 }
 .connected .lamp {
   background: #78deaa;
@@ -431,7 +423,7 @@ main {
 .stats strong {
   display: block;
   margin-top: 2px;
-  font: 600 25px/1.15 var(--metric);
+  font: 600 23px/1.15 var(--metric);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -531,9 +523,9 @@ main {
 .logpanel {
   position: sticky;
   top: 12px;
-  background: #1b2631;
+  background: #24262d;
   color: #e7edf4;
-  border-color: #263540;
+  border-color: #343741;
 }
 .loghead {
   justify-content: space-between;
@@ -543,14 +535,14 @@ main {
   margin: 0;
 }
 .loghead .section-title .ico {
-  color: #ecab77;
+  color: #8ec8ff;
 }
 .logpanel button,
 .logpanel input:not([type="checkbox"]),
 .logpanel select {
-  background: #263441;
+  background: #32353f;
   color: #e5ebef;
-  border-color: #475665;
+  border-color: #474b56;
 }
 .logpanel input::placeholder {
   color: #adbcc8;
@@ -576,7 +568,7 @@ main {
 .stream {
   height: clamp(260px, 42vh, 520px);
   overflow: auto;
-  background: #111c25;
+  background: #191b21;
   border-block: 1px solid #354552;
   color: #d6e3eb;
   padding: 8px 12px;
@@ -589,7 +581,7 @@ main {
   align-items: baseline;
   gap: 5px;
   padding: 7px 0;
-  border-bottom: 1px solid #25343f;
+  border-bottom: 1px solid #30323b;
 }
 .line time {
   color: #a4b4c2;
@@ -630,7 +622,7 @@ main {
   color: #b9c8d4;
 }
 .logfoot a {
-  color: #ffbd8e;
+  color: #a5d2ff;
   text-decoration: none;
 }
 dialog {
@@ -696,7 +688,7 @@ dialog::backdrop {
     width: 160px;
   }
   .brand b {
-    font-size: 25px;
+    font-size: 18px;
   }
   .brand {
     gap: 7px;
@@ -786,7 +778,7 @@ dialog::backdrop {
     font-size: 22px;
   }
   .rail nav button.active {
-    box-shadow: inset 0 -2px 0 var(--accent);
+    background: var(--rail-2);
   }
   main {
     margin: 0;

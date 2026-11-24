@@ -6,12 +6,16 @@ import csv
 import contextlib
 import io
 import json
+import os
 import sys
 from pathlib import Path
 import secrets
 import webbrowser
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--esp-worker"]:
+    for stream in ("stdout", "stderr"):
+        if getattr(sys, stream) is None:
+            setattr(sys, stream, open(os.devnull, "w"))
     import esptool
 
     sys.argv.pop(1)
@@ -392,8 +396,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--browser", action="store_true", help="open in the system browser")
+    parser.add_argument("--desktop-smoke", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT)
     args = parser.parse_args()
+    if sys.platform in ("darwin", "win32") and not (args.browser or args.no_browser):
+        from desktop import run_window, startup_error
+        try:
+            run_window(args.port, lambda: make_app(args.data_dir, monitor_usb=not args.desktop_smoke), args.desktop_smoke)
+        except Exception as exc:
+            if args.desktop_smoke:
+                raise
+            startup_error(str(exc))
+            sys.exit(1)
+        sys.exit(0)
+
     app = make_app(args.data_dir)
 
     async def launch(app):
@@ -403,4 +420,4 @@ if __name__ == "__main__":
             )
 
     app.on_startup.append(launch)
-    web.run_app(app, host="127.0.0.1", port=args.port, access_log=None)
+    web.run_app(app, host="127.0.0.1", port=args.port, access_log=None, print=None)
