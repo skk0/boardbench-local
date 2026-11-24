@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="/static/replay.css" />
     <link rel="stylesheet" href="/static/motion.css" />
     <script defer src="/static/instrument.js"></script>
+    <link rel="stylesheet" href="/static/overview.css" />
+    <script defer src="/static/energy.js"></script>
+    <script defer src="/static/runtime.js"></script>
     <script defer src="/static/panel.js"></script>
     <script defer src="/static/analysis.js"></script>
     <script defer src="/static/suite.js"></script>
@@ -17,6 +20,7 @@
     <script defer src="/static/replay-search.js"></script>
     <script defer src="/static/replay.js"></script>
     <script defer src="/static/motion.js"></script>
+    <script defer src="/static/overview.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -27,6 +31,9 @@
       <nav id="tabs" aria-label="工具">
         <button data-tab="monitor" class="active" aria-current="page">
           <i aria-hidden="true" class="ico activity"></i>元件监视
+        </button>
+        <button data-tab="overview">
+          <i aria-hidden="true" class="ico squares-four"></i>监控总览
         </button>
         <button data-tab="hardware">
           <i aria-hidden="true" class="ico cpu"></i>硬件检测
@@ -150,6 +157,7 @@
         </div>
         <div class="grid">
           <section class="panel">
+            <section id="overview" class="tab" hidden></section>
             <section id="monitor" class="tab">
               <div class="section-title">
                 <i class="ico activity" aria-hidden="true"></i>

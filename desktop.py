@@ -86,6 +86,15 @@ def run_window(port, make_service, smoke=False):
                             """)
                             if not interactions_ok:
                                 raise RuntimeError("桌面窗口连接校验或日志交互异常")
+                            window.evaluate_js("document.querySelector('[data-tab=overview]').click()")
+                            if not window.evaluate_js("document.querySelectorAll('#ovParts button').length > 0"):
+                                raise RuntimeError("未显示板卡总览")
+                            window.evaluate_js("document.querySelector('#ovPowerTab').click()")
+                            if not window.evaluate_js("!document.querySelector('#ovPower').hidden && document.querySelectorAll('#ovPowerCards canvas').length === 3"):
+                                raise RuntimeError("未显示能源遥测面板")
+                            window.evaluate_js("document.querySelector('#ovRuntimeTab').click()")
+                            if not window.evaluate_js("!document.querySelector('#ovRuntime').hidden && document.querySelector('#ovRuntimeInfo').textContent.includes('SRAM')"):
+                                raise RuntimeError("未显示板端运行监控")
                             window.evaluate_js("document.querySelector('[data-tab=hardware]').click()")
                             visible = window.evaluate_js(
                                 "!document.querySelector('#hardware').hidden && "

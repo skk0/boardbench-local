@@ -96,6 +96,24 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(b.tx, 0)
             b.db.close()
 
+    def test_power_sample_window_and_connection_scope(self):
+        def sample():
+            self.b.log("RX", "TCP", '{"bb":1,"part":"power","status":"sample","value":{"battery_v":0}}')
+            return self.b.current_rx_log_id
+
+        first = sample()
+        last = sample()
+        comp = self.b.components
+        def power():
+            return next(r for r in comp.states(self.b.profile, True) if r["part"] == "power")
+        self.assertEqual((power()["first_log_id"], power()["log_id"]), (first, last))
+        comp.last["power"]["tick"] -= 60
+        self.assertEqual(power()["status"], "有读数")
+        comp.last["power"]["tick"] -= 31
+        self.assertEqual(power()["status"], "上报超时")
+        self.b.new("通用串口设备")
+        self.assertEqual(sample(), power()["first_log_id"])
+
     def test_untrusted_serial_strings_are_not_health(self):
         for val in [
             "imu OK probably",

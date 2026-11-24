@@ -435,6 +435,7 @@ async function refresh() {
   tests();
   renderSuite();
   renderComponents();
+  renderOverview(state);
   renderMotion(state);
   updateSmart();
   logs();
@@ -589,7 +590,7 @@ bind("history", async () => {
 });
 for (const b of $("tabs").querySelectorAll("button"))
   b.onclick = () => {
-    document.body.classList.toggle("ai-view", ["analysis", "replay"].includes(b.dataset.tab));
+    document.body.classList.toggle("ai-view", ["analysis", "replay", "overview"].includes(b.dataset.tab));
     if (b.dataset.tab !== "monitor" && selectedPart) {
       clearPart();
       logs(true);
@@ -609,6 +610,7 @@ for (const b of $("tabs").querySelectorAll("button"))
       renderCounts();
       plots();
       if (b.dataset.tab === "hardware") updateSmart();
+      if (b.dataset.tab === "overview") renderOverview(state);
       if (b.dataset.tab === "signal") renderMotion(state);
     }
   };
@@ -643,6 +645,7 @@ bind("theme", () => {
     } catch {
       $("badge").textContent = "本地服务离线";
       renderMotion(null);
+      renderOverview(null);
       if (!$("hardware").hidden) smartUnavailable("本地服务离线，恢复后继续检测。");
     } finally {
       busy = false;

@@ -130,6 +130,7 @@ class Components:
             value=value,
             at=at,
             log_id=log_id,
+            first_log_id=self.last.get(part, {}).get("first_log_id", log_id),
             tick=now,
             periodic=periodic,
             **cycles,
@@ -144,16 +145,17 @@ class Components:
             status = last.get("status", "未上报")
             if not connected:
                 status = "连接断开" if last else "等待设备"
-            elif last and last["periodic"] and time.monotonic() - last["tick"] > 8:
+            elif last and last["periodic"] and time.monotonic() - last["tick"] > (90 if part == "power" else 8):
                 status = "上报超时"
             rows.append(
                 dict(
                     part=part,
-                    name=PARTS.get(part, part),
+                    name="能源遥测" if part == "power" else PARTS.get(part, part),
                     status=status,
                     value=last.get("value", ""),
                     at=last.get("at", ""),
                     log_id=last.get("log_id"),
+                    first_log_id=last.get("first_log_id"),
                 )
             )
         return rows
