@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
     <script defer src="/static/instrument.js"></script>
     <script defer src="/static/panel.js"></script>
+    <script defer src="/static/analysis.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -26,6 +27,9 @@
         </button>
         <button data-tab="voice">
           <i aria-hidden="true" class="ico microphone"></i>小智回声
+        </button>
+        <button data-tab="analysis">
+          <i class="ico waveform" aria-hidden="true"></i>AI 分析
         </button>
       </nav>
       <div class="rail-bottom">
@@ -229,6 +233,75 @@
                 日志分别记录签到、握手、录音状态与回送帧数。音质和屏幕文字由你现场确认。
               </p>
             </section>
+            <section id="analysis" class="tab" hidden>
+              <div class="section-title">
+                <i class="ico waveform" aria-hidden="true"></i>
+                <h2>AI 分析</h2>
+              </div>
+              <div class="ai-layout">
+                <div class="ai-controls">
+                  <label>测试会话<select id="aiRun"></select></label>
+                  <label
+                    >证据范围<select id="aiFocus">
+                      <option value="fault">异常及前后日志</option>
+                      <option value="recent">最近 60 条日志</option>
+                    </select></label
+                  >
+                  <label
+                    >想查什么<textarea
+                      id="aiQuestion"
+                      rows="3"
+                      maxlength="1500"
+                      placeholder="例如：为什么设备能签到，却没有声音？"
+                    ></textarea>
+                  </label>
+                  <button id="aiPreview" class="primary">预览分析内容</button>
+                  <details id="aiSettings">
+                    <summary>模型与接口设置</summary>
+                    <label
+                      >API 地址<input
+                        type="url"
+                        id="aiBase"
+                        placeholder="http://127.0.0.1:11434/v1"
+                    /></label>
+                    <label
+                      >API Key<input
+                        type="password"
+                        autocomplete="new-password"
+                        id="aiKey"
+                    /></label>
+                    <label class="checkline"
+                      ><input
+                        type="checkbox"
+                        id="aiRemember"
+                      />使用系统钥匙串记住密钥</label
+                    >
+                    <label
+                      >模型名称<input
+                        id="aiModel"
+                        list="aiModels"
+                        placeholder="选择或填写服务端模型 ID" /><datalist
+                        id="aiModels"
+                      ></datalist
+                    ></label>
+                    <div class="row">
+                      <button id="aiList">读取模型列表</button
+                      ><button id="aiTest">测试连接</button>
+                    </div>
+                    <div class="row">
+                      <button id="aiSave">保存设置</button
+                      ><button id="aiForget">清除密钥</button>
+                    </div>
+                  </details>
+                  <p id="aiStatus" role="status" aria-live="polite"></p>
+                </div>
+                <div class="ai-output">
+                  <div id="aiPayload" hidden></div>
+                  <h2>已保存的分析</h2>
+                  <div id="aiResults"></div>
+                </div>
+              </div>
+            </section>
           </section>
           <section class="panel logpanel">
             <div class="loghead">
@@ -238,7 +311,10 @@
                   <h2>事件日志</h2>
                 </div>
               </div>
-              <button id="pause">暂停滚动</button>
+              <div class="row">
+                <button id="analyzeFromLog">分析本次测试</button
+                ><button id="pause">暂停滚动</button>
+              </div>
             </div>
             <div class="filters">
               <input

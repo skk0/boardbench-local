@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
 fi
-if ! .venv/bin/python -c 'import aiohttp, serial, esptool' 2>/dev/null; then
+if ! .venv/bin/python -c 'import aiohttp, serial, esptool, keyring' 2>/dev/null; then
   .venv/bin/python -m pip install -r requirements.txt
 fi
 exec .venv/bin/python app.py "$@"

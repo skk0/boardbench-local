@@ -4,6 +4,7 @@ import asyncio
 import codecs
 import contextlib
 import json
+import re
 import hashlib
 from pathlib import Path
 import uuid
@@ -21,6 +22,20 @@ from profiles import BUILTINS, validate
 
 def stamp():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def valid_flash_probe(lines):
+    text = "\n".join(lines)
+    manufacturer = re.search(r"^Manufacturer: ([0-9a-fA-F]{2})$", text, re.M)
+    device = re.search(r"^Device: ([0-9a-fA-F]{4})$", text, re.M)
+    return bool(
+        re.search(r"^Chip is ESP", text, re.M)
+        and manufacturer
+        and device
+        and int(manufacturer[1], 16) not in (0, 255)
+        and int(device[1], 16) not in (0, 65535)
+        and re.search(r"^Detected flash size: [1-9]\d*(?:KB|MB)$", text, re.M)
+    )
 
 
 class NetworkPort:
@@ -477,7 +492,7 @@ class Bench:
             )
             self.result(
                 "ESP 芯片与 Flash",
-                "通过" if rc == 0 and evidence else "失败",
+                "通过" if rc == 0 and valid_flash_probe(lines) else "失败",
                 evidence or "读取失败，检查端口、BOOT 下载模式和上方原始输出。",
             )
         except asyncio.TimeoutError:

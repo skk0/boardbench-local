@@ -19,6 +19,8 @@ subprocess.run(
         "esptool",
         "--collect-submodules",
         "serial.tools",
+        "--collect-all",
+        "keyring",
         "app.py",
     ],
     check=True,

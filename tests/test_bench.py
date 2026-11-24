@@ -11,7 +11,7 @@ import serial
 from aiohttp.test_utils import TestClient, TestServer
 from aiohttp import ClientSession
 from app import make_app
-from bench import Bench
+from bench import Bench, valid_flash_probe
 from profiles import validate, BUILTINS
 
 
@@ -38,6 +38,22 @@ class BenchTests(unittest.IsolatedAsyncioTestCase):
             self.b.add_profile(data)
         with self.assertRaises(ValueError):
             validate({"name": "a", "tests": [{"kind": "script"}]})
+
+    def test_flash_id_requires_valid_chip_and_capacity(self):
+        output = [
+            "Chip is ESP32-S3",
+            "Manufacturer: ef",
+            "Device: 4018",
+            "Detected flash size: 16MB",
+        ]
+        self.assertTrue(valid_flash_probe(output))
+        self.assertFalse(valid_flash_probe(output[:1]))
+        self.assertFalse(
+            valid_flash_probe([*output[:3], "Detected flash size: Unknown"])
+        )
+        self.assertFalse(
+            valid_flash_probe([output[0], "Manufacturer: ff", *output[2:]])
+        )
 
     def test_manual_history(self):
         self.b.result("display", "失败", "observed missing row")

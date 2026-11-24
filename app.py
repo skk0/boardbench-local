@@ -18,6 +18,7 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--esp-worker"]:
     sys.exit(0)
 
 from aiohttp import web
+from ai_analysis import Analysis
 from bench import Bench
 from echo import Echo
 
@@ -29,6 +30,7 @@ def make_app(directory):
     directory.mkdir(parents=True, exist_ok=True)
     bench = Bench(directory / "history.sqlite3")
     echo = Echo(bench)
+    ai = Analysis(bench)
     token = secrets.token_urlsafe(24)
     lock = asyncio.Lock()
 
@@ -133,6 +135,8 @@ def make_app(directory):
     async def report(req):
         data = bench.report(int(req.match_info["run"]))
         fmt = req.match_info["fmt"]
+        if fmt in ("json", "txt"):
+            data["ai_analyses"] = ai.history(data["id"])
         if fmt == "json":
             body = json.dumps(data, ensure_ascii=False, indent=2)
             mime = "application/json"
@@ -166,9 +170,23 @@ def make_app(directory):
                 r = byname.get(name, dict(state="未测", detail=""))
                 rows.append(f"{r['state']}  {name}  {r['detail']}")
             rows += ["", "事件日志 · UTC"] + [
-                f"{r['at']} [{r['level']}] {r['source']} | {r['message']}"
+                f"L{r['id']}  {r['at']} [{r['level']}] {r['source']} | {r['message']}"
                 for r in data["logs"]
             ]
+            for ai_row in data["ai_analyses"]:
+                rows.extend(["", f"AI 分析 · {ai_row['model']} · {ai_row['at']}"])
+                for result in ai_row["snapshot"]["results"]:
+                    rows.append(
+                        f"{result['ref']}  {result['at']}  {result['name']} · {result['state']} · {result['detail']}"
+                    )
+                answer = ai_row["answer"]
+                for finding in answer.get("findings", []):
+                    rows.append(
+                        f"{finding['kind']} · {finding['text']}  {' '.join(finding['refs'])}"
+                    )
+                rows.extend("建议 · " + step for step in answer.get("next", []))
+                if answer.get("unverified"):
+                    rows.append("未核验文本 · " + answer["unverified"])
             body = "\n".join(rows)
             mime = "text/plain"
         else:
@@ -261,6 +279,7 @@ def make_app(directory):
                 raise web.HTTPNotFound()
         return web.json_response({"ok": True})
 
+    app.add_routes(ai.routes())
     app.add_routes(routes)
     app.router.add_static("/static/", ROOT / "web")
 

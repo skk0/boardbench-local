@@ -856,3 +856,129 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
+.ai-view .connect,
+.ai-view .stats,
+.ai-view .logpanel {
+  display: none;
+}
+.ai-view .grid {
+  grid-template-columns: 1fr;
+}
+.ai-layout {
+  display: grid;
+  grid-template-columns: minmax(235px, 0.75fr) minmax(0, 1.3fr);
+  gap: 24px;
+}
+.ai-controls > label,
+#aiSettings > label {
+  margin: 11px 0;
+}
+.ai-controls > button {
+  width: 100%;
+}
+#aiSettings {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+#aiSettings summary,
+.ai-output summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.checkline input {
+  min-height: 0;
+}
+.ai-output {
+  padding-left: 22px;
+  border-left: 1px solid var(--line);
+  min-width: 0;
+}
+.ai-output h3 {
+  margin: 0 0 6px;
+}
+.ai-output h4 {
+  margin: 12px 0 5px;
+}
+.ai-output ol {
+  padding-left: 20px;
+}
+.ai-record,
+#aiPayload {
+  margin: 12px 0;
+  padding: 15px;
+  background: var(--soft);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+#aiPayload {
+  margin-top: 0;
+}
+#aiPayload > button {
+  margin-top: 12px;
+}
+.ai-output pre,
+dialog pre {
+  font: 12px/1.6 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 340px;
+  overflow: auto;
+}
+.finding {
+  margin: 12px 0;
+}
+.finding > strong {
+  display: inline-block;
+  font-size: 12px;
+  margin-right: 8px;
+  color: var(--active);
+}
+.ref-list {
+  margin-top: 4px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.ref-list button {
+  min-height: 26px;
+  padding: 3px 7px;
+  font: 12px var(--mono);
+}
+#aiStatus.error {
+  color: var(--active);
+}
+.loghead > .row {
+  margin: 0;
+}
+@media (max-width: 740px) {
+  .ai-layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .ai-output {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 15px 0;
+  }
+  .loghead {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 640px) {
+  .rail nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .rail button {
+    font-size: 10px;
+  }
+  .rail-bottom button {
+    font-size: 0;
+  }
+}

@@ -31,6 +31,14 @@ with tempfile.TemporaryDirectory() as temp:
                     f"http://127.0.0.1:{port}/static/panel.js", timeout=2
                 ) as r:
                     assert b"async function" in r.read()
+                with urlopen(
+                    f"http://127.0.0.1:{port}/api/ai/settings", timeout=2
+                ) as r:
+                    assert json.load(r)["has_key"] is False
+                with urlopen(
+                    f"http://127.0.0.1:{port}/static/analysis.js", timeout=2
+                ) as r:
+                    assert b"loadRunResults" in r.read()
                 break
             except OSError:
                 time.sleep(0.3)

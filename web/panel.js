@@ -486,11 +486,18 @@ bind("history", async () => {
       a.href = "/api/backup/" + f.id;
       box.append(a, el("p", "SHA-256 " + f.sha256));
     }
+    box.append(
+      button("AI 分析", () => {
+        $("dialog").close();
+        openAnalysis(r.id);
+      }),
+    );
     body.append(box);
   }
 });
 for (const b of $("tabs").querySelectorAll("button"))
   b.onclick = () => {
+    document.body.classList.toggle("ai-view", b.dataset.tab === "analysis");
     $("crumb").textContent = b.textContent.trim();
     for (const n of $("tabs").querySelectorAll("button")) {
       if (n === b) n.setAttribute("aria-current", "page");
