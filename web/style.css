@@ -1026,3 +1026,100 @@ dialog pre {
 .suite-item p {
   margin: 3px 0 0;
 }
+.monitor-bar {
+  gap: 16px;
+  margin: 8px 0 14px;
+}
+.monitor-bar input {
+  width: 16px;
+  accent-color: var(--active);
+}
+#monitorInfo {
+  font-size: 14px;
+}
+.part-table {
+  overflow: auto;
+  max-height: 54vh;
+}
+.part-table table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.part-table th {
+  position: sticky;
+  top: 0;
+  background: var(--soft);
+  color: var(--sub);
+  text-align: left;
+  font-weight: 500;
+}
+.part-table th,
+.part-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.part-table td:first-child,
+.part-table td:nth-child(2) {
+  white-space: nowrap;
+}
+.part-table td:nth-child(3) {
+  overflow-wrap: anywhere;
+  min-width: 65px;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+}
+.part-table td:last-child {
+  font: 11px var(--mono);
+  color: var(--sub);
+}
+.part-table td button {
+  padding: 2px 0;
+  border: 0;
+  min-height: 25px;
+  background: none;
+  text-align: left;
+}
+.part-table .selected td {
+  background: var(--soft);
+}
+.part-state {
+  border-radius: 4px;
+  padding: 3px 5px;
+  background: var(--soft);
+  color: var(--sub);
+}
+.part-state[data-tone="ok"] {
+  color: #12643d;
+  background: #e3f4e9;
+}
+.part-state[data-tone="fail"] {
+  color: #a22c28;
+  background: #ffece9;
+}
+.part-state[data-tone="warn"] {
+  color: #875100;
+  background: #ffefc8;
+}
+#partScope {
+  padding: 2px 14px 8px;
+  color: #d1e1ed;
+}
+#partScope button {
+  margin-left: 8px;
+  min-height: 25px;
+  padding: 3px 8px;
+}
+@media (max-width: 640px) {
+  .rail nav {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin-right: 36px;
+  }
+  .rail nav button {
+    min-width: 0;
+  }
+  .rail-bottom button {
+    min-width: 32px;
+  }
+}

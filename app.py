@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import csv
+import contextlib
 import io
 import json
 import sys
@@ -21,13 +22,14 @@ from aiohttp import web
 from ai_analysis import Analysis
 from bench import Bench
 from echo import Echo
+from monitor import AutoUSB
 from suite import Suite, make_plan
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT = Path.home() / ".boardbench"
 
 
-def make_app(directory):
+def make_app(directory, monitor_usb=True):
     directory.mkdir(parents=True, exist_ok=True)
     bench = Bench(directory / "history.sqlite3")
     echo = Echo(bench)
@@ -35,6 +37,7 @@ def make_app(directory):
     suite = Suite(bench)
     token = secrets.token_urlsafe(24)
     lock = asyncio.Lock()
+    auto = AutoUSB(bench, lock)
 
     @web.middleware
     async def policy(req, handler):
@@ -102,11 +105,27 @@ def make_app(directory):
                 network_port=bench.network_port,
                 job=bench.taskname,
                 suite=suite.state(),
+                storage_hold=bench.storage_hold,
+                components=bench.components.states(bench.profile, bool(bench.ser)),
+                auto_usb=auto.enabled,
+                usb_message=auto.message,
+                usb_ports=auto.online,
                 rx=bench.rx,
                 tx=bench.tx,
                 logs=logs,
                 echo=echo.url,
                 frames=echo.frames,
+            )
+        )
+
+    @routes.get("/api/components/{run}/{part}")
+    async def component_log(req):
+        run = int(req.match_info["run"])
+        part = req.match_info["part"]
+        return web.json_response(
+            bench.rows(
+                "SELECT l.id,l.at,l.level,l.message,l.raw FROM component_events e JOIN logs l ON l.id=e.log WHERE e.run=? AND e.part=? ORDER BY l.id DESC LIMIT 200",
+                (run, part),
             )
         )
 
@@ -145,28 +164,16 @@ def make_app(directory):
 
     @routes.get("/api/report/{run}/{fmt}")
     async def report(req):
-        data = bench.report(int(req.match_info["run"]))
+        data = bench.report(int(req.match_info["run"]), include_logs=False)
         fmt = req.match_info["fmt"]
         if fmt in ("json", "txt"):
             data["ai_analyses"] = ai.history(data["id"])
             data["suites"] = suite.history(data["id"])
         if fmt == "json":
-            body = json.dumps(data, ensure_ascii=False, indent=2)
+            body = json.dumps(data, ensure_ascii=False)[:-1] + ', "logs": ['
             mime = "application/json"
         elif fmt == "csv":
-            f = io.StringIO()
-            w = csv.writer(f)
-            w.writerow(["UTC time", "level", "source", "message", "hex"])
-            for row in data["logs"]:
-                # Prevent spreadsheet applications from executing data received from devices.
-                fields = [row[k] for k in ("at", "level", "source", "message", "raw")]
-                w.writerow(
-                    [
-                        "'" + v if v.lstrip().startswith(("=", "+", "-", "@")) else v
-                        for v in fields
-                    ]
-                )
-            body = "\ufeff" + f.getvalue()
+            body = "\ufeffUTC time,level,source,message,hex\r\n"
             mime = "text/csv"
         elif fmt == "txt":
             byname = {r["name"]: r for r in data["results"]}
@@ -182,10 +189,6 @@ def make_app(directory):
             for name in names:
                 r = byname.get(name, dict(state="未测", detail=""))
                 rows.append(f"{r['state']}  {name}  {r['detail']}")
-            rows += ["", "事件日志 · UTC"] + [
-                f"L{r['id']}  {r['at']} [{r['level']}] {r['source']} | {r['message']}"
-                for r in data["logs"]
-            ]
             for batch in data["suites"]:
                 rows.extend(
                     [
@@ -209,17 +212,60 @@ def make_app(directory):
                 rows.extend("建议 · " + step for step in answer.get("next", []))
                 if answer.get("unverified"):
                     rows.append("未核验文本 · " + answer["unverified"])
-            body = "\n".join(rows)
+            body = "\n".join(rows) + "\n\n事件日志 · UTC\n"
             mime = "text/plain"
         else:
             raise web.HTTPNotFound()
-        return web.Response(
-            text=body,
-            content_type=mime,
+        upper = bench.db.execute(
+            "SELECT coalesce(max(id),0) FROM logs WHERE run=?", (data["id"],)
+        ).fetchone()[0]
+        response = web.StreamResponse(
             headers={
-                "Content-Disposition": f'attachment; filename="boardbench-{data["id"]}.{fmt}"'
-            },
+                "Content-Type": mime + "; charset=utf-8",
+                "Content-Disposition": f'attachment; filename="boardbench-{data["id"]}.{fmt}"',
+                "Cache-Control": "no-store",
+            }
         )
+        await response.prepare(req)
+        await response.write(body.encode())
+        cursor = 0
+        while cursor < upper:
+            entries = bench.rows(
+                "SELECT id,at,level,source,message,raw FROM logs WHERE run=? AND id>? AND id<=? ORDER BY id LIMIT 128",
+                (data["id"], cursor, upper),
+            )
+            if not entries:
+                break
+            if fmt == "json":
+                chunk = ("," if cursor else "") + ",".join(
+                    json.dumps(r, ensure_ascii=False) for r in entries
+                )
+            elif fmt == "txt":
+                chunk = "".join(
+                    f"L{r['id']}  {r['at']} [{r['level']}] {r['source']} | {r['message']}\n"
+                    for r in entries
+                )
+            else:
+                f = io.StringIO()
+                writer = csv.writer(f)
+                for r in entries:
+                    fields = [r[k] for k in ("at", "level", "source", "message", "raw")]
+                    writer.writerow(
+                        [
+                            "'" + v
+                            if v.lstrip().startswith(("=", "+", "-", "@"))
+                            else v
+                            for v in fields
+                        ]
+                    )
+                chunk = f.getvalue()
+            await response.write(chunk.encode())
+            cursor = entries[-1]["id"]
+            await asyncio.sleep(0)
+        if fmt == "json":
+            await response.write(b"]}")
+        await response.write_eof()
+        return response
 
     @routes.post("/api/{op}")
     async def command(req):
@@ -234,11 +280,16 @@ def make_app(directory):
                 await bench.select_profile(d["profile"])
             elif op == "import":
                 bench.add_profile(d["data"])
+            elif op == "auto-usb":
+                auto.enable(d["enabled"] is True)
             elif op == "connect":
                 bench.connect(d["port"], int(d["baud"]), d.get("framing", "8N1"))
+                auto.remember(d["port"], int(d["baud"]), d.get("framing", "8N1"))
             elif op == "network":
                 await bench.network(d["transport"], d["host"], int(d["port"]))
             elif op == "disconnect":
+                if bench.transport == "串口":
+                    auto.ignored.add(bench.usb)
                 await bench.stop()
                 await bench.disconnect()
             elif op == "backup":
@@ -317,7 +368,17 @@ def make_app(directory):
     app.add_routes(routes)
     app.router.add_static("/static/", ROOT / "web")
 
+    async def startup(app):
+        if monitor_usb:
+            auto.task = asyncio.create_task(auto.watch())
+
+    app.on_startup.append(startup)
+
     async def close(app):
+        if auto.task:
+            auto.task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await auto.task
         await echo.stop()
         await bench.stop()
         await bench.disconnect()

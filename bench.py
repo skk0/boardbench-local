@@ -5,6 +5,7 @@ import codecs
 import contextlib
 import json
 import re
+import shutil
 import hashlib
 from pathlib import Path
 import uuid
@@ -17,6 +18,7 @@ import select
 import socket
 import serial
 from serial.tools import list_ports
+from monitor import Components
 from profiles import BUILTINS, validate
 
 
@@ -79,6 +81,8 @@ class NetworkPort:
 
 class Bench:
     def __init__(self, path):
+        self.db_path = None if str(path) == ":memory:" else Path(path)
+        self.storage_hold = ""
         self.backups = Path(path).parent / "backups"
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
@@ -101,7 +105,15 @@ class Bench:
         self.network_host = ""
         self.network_port = 0
         self.rx = self.tx = 0
-        self.new("通用串口设备")
+        self.components = Components(self.db)
+        previous = self.db.execute(
+            "SELECT profile FROM runs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        self.new(
+            previous[0]
+            if previous and previous[0] in self.profiles()
+            else "通用串口设备"
+        )
 
     def profiles(self):
         return {
@@ -140,6 +152,7 @@ class Bench:
     def new(self, profile, keep_connection=False):
         if (self.ser and not keep_connection) or self.job:
             raise ValueError("请先停止任务并断开设备，再开始新的测试。")
+        self.components.last.clear()
         self.tests = self.profiles()[profile]
         self.profile = profile
         self.run = self.db.execute(
@@ -151,10 +164,13 @@ class Bench:
         self.log("INFO", "会话", "开始测试 · " + profile)
 
     def log(self, level, source, message, raw=""):
-        self.db.execute(
+        at = stamp()
+        row = self.db.execute(
             "INSERT INTO logs(run,at,level,source,message,raw) VALUES(?,?,?,?,?,?)",
-            (self.run, stamp(), level, source, str(message), raw),
+            (self.run, at, level, source, str(message), raw),
         )
+        if level == "RX":
+            self.components.observe(self.db, self.run, row.lastrowid, at, message)
         self.db.commit()
 
     def result(self, name, state, detail):
@@ -171,7 +187,7 @@ class Bench:
     def rows(self, sql, params=()):
         return [dict(r) for r in self.db.execute(sql, params)]
 
-    def report(self, run):
+    def report(self, run, include_logs=True):
         rows = self.rows("SELECT * FROM runs WHERE id=?", (run,))
         if not rows:
             raise ValueError("没有这次测试。")
@@ -183,10 +199,11 @@ class Bench:
         info["backups"] = self.rows(
             "SELECT id,size,sha256 FROM backups WHERE run=?", (run,)
         )
-        info["logs"] = self.rows(
-            "SELECT id,at,level,source,message,raw FROM logs WHERE run=? ORDER BY id",
-            (run,),
-        )
+        if include_logs:
+            info["logs"] = self.rows(
+                "SELECT id,at,level,source,message,raw FROM logs WHERE run=? ORDER BY id",
+                (run,),
+            )
         return info
 
     @staticmethod
@@ -214,9 +231,26 @@ class Bench:
         self.db.execute("UPDATE runs SET port=? WHERE id=?", (port, self.run))
         self.db.commit()
 
+    def check_space(self):
+        if not self.db_path:
+            return
+        if shutil.disk_usage(self.db_path.parent).free < 1024**3:
+            raise ValueError("可用空间不足 1 GiB，已暂停采集。")
+        size = sum(
+            p.stat().st_size
+            for p in (self.db_path, Path(str(self.db_path) + "-wal"))
+            if p.is_file()
+        )
+        if size >= 256 * 1024**2:
+            raise ValueError(
+                "测试历史达到 256 MiB，已暂停采集。可在停机后归档数据目录并重新启动。"
+            )
+        self.storage_hold = ""
+
     def connect(self, port, baud, framing="8N1"):
         if self.ser or self.job:
             raise ValueError("串口或检测任务正在使用中。")
+        self.check_space()
         self.select(port)
         if not 300 <= baud <= 4000000:
             raise ValueError("波特率超出范围。")
@@ -234,6 +268,7 @@ class Bench:
         handle.dtr = handle.rts = False
         handle.port = port
         handle.open()
+        self.components.last.clear()
         self.ser = handle
         self.transport = "串口"
         self.bind(port)
@@ -243,12 +278,14 @@ class Bench:
         self.reader = asyncio.create_task(self.read_loop())
 
     async def network(self, transport, host, port):
+        self.check_space()
         host = host.strip()
         if transport not in ("TCP", "UDP") or not host or not 1 <= port <= 65535:
             raise ValueError("设备主机名与端口无效。")
         address = f"{transport.lower()}://{host}:{port}"
         if self.ser or self.job or (self.usb and self.usb != address):
             raise ValueError("请结束当前连接，换设备时先新建测试。")
+        self.components.last.clear()
         self.ser = await NetworkPort.connect(host, port, transport)
         self.transport = transport
         self.network_host = host
@@ -267,25 +304,43 @@ class Bench:
         pending = bytearray()
         last = time.monotonic()
 
+        next_check = 0
+
         def output(raw):
             display = decoder.decode(raw)
             self.log("RX", self.transport, display.rstrip("\r\n"), raw.hex(" "))
 
         try:
             while self.ser:
+                if time.monotonic() >= next_check:
+                    try:
+                        self.check_space()
+                    except ValueError as exc:
+                        self.storage_hold = str(exc)
+                        self.log("WARN", "存储", self.storage_hold)
+                        self.close_port()
+                        break
+                    next_check = time.monotonic() + 2
                 count = self.ser.in_waiting
-                if count:
+                if count and len(pending) < 8192:
                     data = self.ser.read(min(count, 8192))
                     self.rx += len(data)
                     self.feed(data)
                     pending.extend(data)
                     last = time.monotonic()
-                while b"\n" in pending or len(pending) >= 4096:
+                for _ in range(128):
+                    if b"\n" not in pending and len(pending) < 4096:
+                        break
                     end = pending.find(b"\n") + 1 or 4096
                     end = min(end, 4096)
                     output(bytes(pending[:end]))
                     del pending[:end]
-                if pending and time.monotonic() - last > 0.15:
+                if (
+                    pending
+                    and len(pending) < 4096
+                    and b"\n" not in pending
+                    and time.monotonic() - last > 0.15
+                ):
                     output(bytes(pending))
                     pending.clear()
                 await asyncio.sleep(0.025)
@@ -411,6 +466,7 @@ class Bench:
         )
 
     async def backup(self, port):
+        self.check_space()
         await self.disconnect()
         self.bind(port)
         self.backups.mkdir(parents=True, exist_ok=True)

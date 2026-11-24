@@ -207,7 +207,9 @@ class BenchTests(unittest.IsolatedAsyncioTestCase):
 class ApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.client = TestClient(TestServer(make_app(Path(self.temp.name))))
+        self.client = TestClient(
+            TestServer(make_app(Path(self.temp.name), monitor_usb=False))
+        )
         await self.client.start_server()
         self.token = (await (await self.client.get("/api/setup")).json())["token"]
         self.run = (await (await self.client.get("/api/state")).json())["run"]

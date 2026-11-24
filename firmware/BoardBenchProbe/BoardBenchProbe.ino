@@ -1,9 +1,10 @@
-// Optional diagnostic sketch for ESP32 Arduino. Commands only run on explicit serial requests.
+// Optional ESP32 diagnostic sketch. Periodic telemetry runs independently of command tests.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <esp_heap_caps.h>
 #include <soc/soc_caps.h>
+#include "telemetry.h"
 
 String input;
 bool overflow = false;
@@ -42,19 +43,21 @@ void wifiScan() {
 }
 
 void scanBus(int sda, int scl) {
-  if (sda == scl || sda < 0 || scl < 0 || sda >= SOC_GPIO_PIN_COUNT || scl >= SOC_GPIO_PIN_COUNT) {
-    Serial.println("ERR invalid SDA/SCL");
+#ifndef BOARDBENCH_ATK_BOX1
+  Serial.println("ERR no verified I2C pinout in this generic build");
+  return;
+#else
+  if (sda != 48 || scl != 45 || !boxBus) {
+    Serial.println("ERR use the verified BOX1 I2C bus only");
     return;
   }
-  if (!Wire.begin(sda, scl, 100000)) { Serial.println("ERR I2C init"); return; }
-  Wire.setTimeOut(30);
   unsigned count = 0;
   for (int address = 8; address <= 0x77; address++) {
     Wire.beginTransmission(address);
     if (Wire.endTransmission() == 0) { Serial.printf("I2C ACK 0x%02X\n", address); count++; }
   }
-  Wire.end();
   Serial.printf("%s I2C devices=%u\n", count ? "OK" : "ERR", count);
+#endif
 }
 
 void dispatch(const String &line) {
@@ -80,6 +83,7 @@ void dispatch(const String &line) {
 void setup() {
   Serial.begin(115200);
   input.reserve(96);
+  telemetrySetup();
   Serial.println("BoardBenchProbe ready");
 }
 void loop() {
@@ -93,5 +97,6 @@ void loop() {
     } else if (input.length() < 96) input += c;
     else overflow = true;
   }
+  telemetryTick();
   delay(1);
 }

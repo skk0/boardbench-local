@@ -9,6 +9,7 @@
     <script defer src="/static/panel.js"></script>
     <script defer src="/static/analysis.js"></script>
     <script defer src="/static/suite.js"></script>
+    <script defer src="/static/monitor.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -17,7 +18,10 @@
       </div>
       <div class="rail-label">工作区</div>
       <nav id="tabs" aria-label="工具">
-        <button data-tab="hardware" class="active" aria-current="page">
+        <button data-tab="monitor" class="active" aria-current="page">
+          <i aria-hidden="true" class="ico activity"></i>元件监视
+        </button>
+        <button data-tab="hardware">
           <i aria-hidden="true" class="ico cpu"></i>硬件检测
         </button>
         <button data-tab="terminal">
@@ -48,7 +52,7 @@
       <header class="top">
         <div class="crumb">
           <i aria-hidden="true" class="ico squares-four"></i> 工作区
-          <span>/</span> <b id="crumb">硬件检测</b>
+          <span>/</span> <b id="crumb">元件监视</b>
         </div>
         <div class="top-tools">
           <span id="badge" role="status">连接本地服务中</span
@@ -136,7 +140,38 @@
         </div>
         <div class="grid">
           <section class="panel">
-            <section id="hardware" class="tab">
+            <section id="monitor" class="tab">
+              <div class="section-title">
+                <i class="ico activity" aria-hidden="true"></i>
+                <h2>元件实时监视</h2>
+              </div>
+              <div class="row monitor-bar">
+                <label class="checkline"
+                  ><input type="checkbox" id="autoUsb" />USB 自动连接</label
+                ><label class="checkline"
+                  ><input
+                    type="checkbox"
+                    id="onlyReported"
+                  />仅显示已上报</label
+                >
+              </div>
+              <strong id="monitorInfo"></strong>
+              <p id="monitorHelp"></p>
+              <div class="part-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>元件</th>
+                      <th>状态</th>
+                      <th>最新读数 / 输出</th>
+                      <th>更新时间</th>
+                    </tr>
+                  </thead>
+                  <tbody id="componentRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <section id="hardware" class="tab" hidden>
               <div class="suite-box">
                 <div class="section-title">
                   <i class="ico checks" aria-hidden="true"></i>
@@ -326,6 +361,9 @@
                 <button id="analyzeFromLog">分析本次测试</button
                 ><button id="pause">暂停滚动</button>
               </div>
+            </div>
+            <div id="partScope" hidden>
+              <b id="partName"></b><button id="partAll">查看全部日志 ×</button>
             </div>
             <div class="filters">
               <input

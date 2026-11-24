@@ -15,7 +15,9 @@ from bench import Bench
 class AnalysisTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = tempfile.TemporaryDirectory()
-        self.client = TestClient(TestServer(make_app(Path(self.dir.name))))
+        self.client = TestClient(
+            TestServer(make_app(Path(self.dir.name), monitor_usb=False))
+        )
         self.requests = []
         provider = web.Application()
 

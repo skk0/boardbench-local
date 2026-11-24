@@ -220,7 +220,15 @@ function logs(force = false) {
   const query = $("search").value.toLowerCase(),
     level = $("level").value,
     hex = $("hex").checked;
-  const key = [state.run, state.logs.at(-1)?.id, query, level, hex].join("/");
+  const records = selectedPart ? partLogs : state.logs;
+  const key = [
+    state.run,
+    selectedPart,
+    records.at(-1)?.id,
+    query,
+    level,
+    hex,
+  ].join("/");
   if (key === logKey && !force) return;
   logKey = key;
   const deviceLevel = (r) => {
@@ -231,7 +239,7 @@ function logs(force = false) {
     if (/^(?:W\s*\(\d+\)|WARN(?:ING)?\b)/i.test(text)) return "WARN";
     return "";
   };
-  const lines = state.logs.filter(
+  const lines = records.filter(
     (r) =>
       (!level || r.level === level || deviceLevel(r) === level) &&
       [r.message, r.source, r.at, fmtTime(r.at), r.raw].some((s) =>
@@ -354,6 +362,23 @@ async function refresh() {
   $("logCSV").href = "/api/report/" + state.run + "/csv";
   $("template").href =
     "/api/template?name=" + encodeURIComponent($("profile").value);
+  if (
+    state.usb_ports &&
+    $("port").dataset.paths !==
+      JSON.stringify(state.usb_ports.map((x) => x.path))
+  ) {
+    const chosen = $("port").value;
+    const rows = state.usb_ports;
+    $("port").dataset.paths = JSON.stringify(rows.map((x) => x.path));
+    $("port").replaceChildren(
+      ...rows.map((x) => new Option(x.path + " · " + x.label, x.path)),
+    );
+    if (!rows.length) $("port").add(new Option("等待 USB 串口", ""));
+    if (rows.some((x) => x.path === chosen)) $("port").value = chosen;
+    $("portNote").dataset.usb = rows.length
+      ? "已发现 " + rows.length + " 个串口"
+      : "请使用 USB 数据线连接设备。";
+  }
   if (state.connected) {
     $("transport").value = state.transport;
     if (state.transport === "串口") {
@@ -368,6 +393,7 @@ async function refresh() {
   buttons();
   tests();
   renderSuite();
+  renderComponents();
   logs();
   plots();
 }
@@ -501,6 +527,10 @@ bind("history", async () => {
 for (const b of $("tabs").querySelectorAll("button"))
   b.onclick = () => {
     document.body.classList.toggle("ai-view", b.dataset.tab === "analysis");
+    if (b.dataset.tab !== "monitor" && selectedPart) {
+      clearPart();
+      logs(true);
+    }
     $("crumb").textContent = b.textContent.trim();
     for (const n of $("tabs").querySelectorAll("button")) {
       if (n === b) n.setAttribute("aria-current", "page");

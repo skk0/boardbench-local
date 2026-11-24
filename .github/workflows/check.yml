@@ -36,3 +36,11 @@ jobs:
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core install esp32:esp32@3.3.5 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
       - run: arduino-cli compile --fqbn esp32:esp32:esp32s3:PSRAM=opi firmware/BoardBenchProbe
+
+      - name: Build telemetry firmware for original ATK BOX
+        run: arduino-cli compile --fqbn esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi --build-property 'compiler.cpp.extra_flags=-DBOARDBENCH_ATK_BOX1' --output-dir board-firmware firmware/BoardBenchProbe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BoardBenchProbe-ATK-DNESP32S3B-BOX1
+          path: board-firmware/*.merged.bin
+          if-no-files-found: error
