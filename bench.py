@@ -82,6 +82,9 @@ class Bench:
         self.transport = "串口"
         self.usb = ""
         self.baud = 115200
+        self.framing = "8N1"
+        self.network_host = ""
+        self.network_port = 0
         self.rx = self.tx = 0
         self.new("通用串口设备")
 
@@ -205,6 +208,7 @@ class Bench:
         self.transport = "串口"
         self.bind(port)
         self.baud = baud
+        self.framing = framing
         self.log("INFO", "串口", f"已连接 {port} · {baud} {framing}")
         self.reader = asyncio.create_task(self.read_loop())
 
@@ -217,6 +221,8 @@ class Bench:
             raise ValueError("请结束当前连接，换设备时先新建测试。")
         self.ser = await NetworkPort.connect(host, port, transport)
         self.transport = transport
+        self.network_host = host
+        self.network_port = port
         self.bind(address)
         self.log(
             "INFO",

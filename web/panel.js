@@ -353,7 +353,17 @@ async function refresh() {
   $("logCSV").href = "/api/report/" + state.run + "/csv";
   $("template").href =
     "/api/template?name=" + encodeURIComponent($("profile").value);
-  if (state.connected) $("transport").value = state.transport;
+  if (state.connected) {
+    $("transport").value = state.transport;
+    if (state.transport === "串口") {
+      $("port").value = state.port;
+      $("baud").value = state.baud;
+      $("framing").value = state.framing;
+    } else {
+      $("host").value = state.network_host;
+      $("netPort").value = state.network_port;
+    }
+  }
   buttons();
   tests();
   logs();
