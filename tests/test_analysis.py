@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -150,14 +151,14 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.post("ai/test")).status, 400)
         await self.config()
         self.assertEqual((await self.post("ai/test")).status, 200)
-        db = sqlite3.connect(Path(self.dir.name) / "history.sqlite3")
-        self.addCleanup(db.close)
         def log(source, level, message):
-            with db:
+            path = Path(self.dir.name) / "history.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute(
                     "INSERT INTO logs(run,at,source,level,message,raw) VALUES(?,?,?,?,?, '')",
                     (self.run, "2026-11-24T00:00:00Z", source, level, message),
                 )
+
         log("操作", "ERROR", "/api/ai/test · 模型接口返回 HTTP 401")
         for focus in ("fault", "recent"):
             preview = await (await self.post("ai/preview", run=self.run, focus=focus)).json()
