@@ -747,35 +747,29 @@ dialog::backdrop {
   .rail {
     position: static;
     width: 100%;
-    display: block;
-    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+    padding: 6px 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
   .brand,
   .rail-label {
     display: none;
   }
   .rail nav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    margin-right: 56px;
-    gap: 2px;
+    display: contents;
   }
   .rail button {
-    min-height: 44px;
-    min-width: 44px;
-    line-height: 1.1;
+    justify-content: center;
+    min-height: 46px;
+    padding: 4px 2px;
+    font-size: 12px;
+    line-height: 1.25;
   }
   .rail-bottom {
-    position: absolute;
-    right: 8px;
-    top: 8px;
-  }
-  .rail-bottom button {
-    font-size: 0;
-    gap: 0;
-  }
-  .rail-bottom .ico {
-    font-size: 22px;
+    margin: 0;
   }
   .rail nav button.active {
     background: var(--rail-2);
@@ -943,8 +937,13 @@ dialog pre {
   padding: 3px 7px;
   font: 12px var(--mono);
 }
-#aiStatus.error {
-  color: var(--active);
+#aiStatus.error { color: #a22c28; }
+[data-theme="dark"] #aiStatus.error { color: #ffb3a8; }
+.ai-context {
+  border-left: 2px solid var(--strong);
+  padding-left: 10px;
+  font-size: 13px;
+  color: var(--sub);
 }
 .loghead > .row {
   margin: 0;
@@ -961,17 +960,6 @@ dialog pre {
   }
   .loghead {
     flex-wrap: wrap;
-  }
-}
-@media (max-width: 640px) {
-  .rail nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-  .rail button {
-    font-size: 10px;
-  }
-  .rail-bottom button {
-    font-size: 0;
   }
 }
 .suite-box {
@@ -1103,18 +1091,6 @@ dialog pre {
   min-height: 25px;
   padding: 3px 8px;
 }
-@media (max-width: 640px) {
-  .rail nav {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    margin-right: 36px;
-  }
-  .rail nav button {
-    min-width: 0;
-  }
-  .rail-bottom button {
-    min-width: 32px;
-  }
-}
 
 .text-link {
   display: inline-flex;
@@ -1180,3 +1156,19 @@ dialog pre {
 .smart-profile strong { color: var(--ink); }
 .smart-profile[open] > label { margin-top: 12px; }
 .smart-profile .row { margin-bottom: 12px; }
+
+#dialogFeedback {
+  color: var(--ink);
+  background: var(--soft);
+  border-left: 3px solid var(--active);
+  padding: 9px 12px;
+}
+.logpanel #pause[aria-pressed="true"] {
+  background: #264762;
+  border-color: #7596ae;
+}
+#emptyParts { padding: 8px; }
+.part-table tr.selected td:first-child {
+  box-shadow: inset 3px 0 var(--active);
+  padding-left: 10px;
+}

@@ -72,8 +72,18 @@ async function loadRunResults() {
     article.className = "ai-record";
     article.append(
       el("h3", rec.snapshot.question || "测试诊断"),
-      el("small", rec.model + " · " + new Date(rec.at).toLocaleString()),
+      el("small", "已收到模型回复 · " + rec.model + " · " + new Date(rec.at).toLocaleString()),
     );
+    const events = rec.snapshot.events;
+    const legacyAI = events.filter(e => e.source === "操作" && e.text.startsWith("/api/ai/"));
+    if (legacyAI.length) {
+      const note = el("p", "这份报告包含先前的 AI 接口日志（" +
+        legacyAI.map(e => e.ref).join("、") + "）。" +
+        (events.every(e => e.source === "会话" || legacyAI.includes(e)) && !rec.snapshot.results.length
+          ? "当时没有采集到板卡诊断证据。" : "这些记录描述的是当时的接口调用。"));
+      note.className = "ai-context";
+      article.append(note);
+    }
     const a = rec.answer;
     if (a.warning) article.append(el("p", a.warning));
     for (const f of a.findings) {
@@ -241,13 +251,17 @@ bind("aiPreview", () =>
           s.session +
           " · " +
           s.selected_events +
-          " / " +
-          s.total_events +
-          " 条事件 · " +
+          " 条诊断日志 · " +
           s.results.length +
-          " 项实测结论。已省略原始 HEX 和音频。",
+          " 项检测记录",
       ),
     );
+    if (!preview.ticket) {
+      area.append(el("p", "所选会话还没有诊断日志或检测记录。连接板子采集输出，或选择已有记录的测试会话。"));
+      area.append(button("查看元件监视", () => document.querySelector('[data-tab="monitor"]').click()));
+      aiMessage("暂无板卡诊断资料，本次未发送。");
+      return;
+    }
     const details = el("details");
     details.append(
       el("summary", "查看发送正文"),
@@ -258,10 +272,20 @@ bind("aiPreview", () =>
       button("发送并分析", () =>
         busyAI(async () => {
           aiMessage("正在等待模型分析，设备日志继续采集…");
-          await aiPost("analyze", { ticket: aiTicket });
+          let report;
+          try {
+            report = await aiPost("analyze", { ticket: aiTicket });
+          } catch (error) {
+            aiMessage("本次报告请求未完成 · " + error.message, true);
+            return;
+          }
           invalidatePreview();
-          await loadRunResults();
-          aiMessage("分析已保存，可点击引用核对证据。");
+          aiMessage("报告 #" + report.id + " 已收到并保存，可点击引用核对证据。");
+          try {
+            await loadRunResults();
+          } catch {
+            aiMessage("报告 #" + report.id + " 已保存。重新打开 AI 分析可刷新列表。");
+          }
         }),
       ),
     );

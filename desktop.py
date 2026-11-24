@@ -65,6 +65,27 @@ def run_window(port, make_service, smoke=False):
                         raise RuntimeError("桌面窗口未载入")
                     for _ in range(100):
                         if window.evaluate_js("document.querySelectorAll('#componentRows tr').length > 0"):
+                            interactions_ok = window.evaluate_js("""
+                                (() => {
+                                    const byId = id => document.getElementById(id);
+                                    const mode = byId('transport');
+                                    mode.value = 'TCP';
+                                    mode.dispatchEvent(new Event('change'));
+                                    if (!byId('connect').disabled) return false;
+                                    byId('pause').click();
+                                    const search = byId('search');
+                                    search.value = 'boardbench-smoke-empty-filter';
+                                    search.dispatchEvent(new Event('input'));
+                                    if (byId('clearLogFilters').hidden ||
+                                        byId('pause').getAttribute('aria-pressed') !== 'true') return false;
+                                    byId('clearLogFilters').click();
+                                    byId('pause').click();
+                                    return search.value === '' && byId('clearLogFilters').hidden &&
+                                           byId('pause').getAttribute('aria-pressed') === 'false';
+                                })()
+                            """)
+                            if not interactions_ok:
+                                raise RuntimeError("桌面窗口连接校验或日志交互异常")
                             window.evaluate_js("document.querySelector('[data-tab=hardware]').click()")
                             visible = window.evaluate_js(
                                 "!document.querySelector('#hardware').hidden && "

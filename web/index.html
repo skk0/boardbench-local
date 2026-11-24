@@ -126,7 +126,7 @@
                 <option>7O1</option>
               </select></label
             ><button class="usb" id="scan">扫描</button
-            ><button class="primary" id="connect">连接串口</button>
+            ><button class="primary" id="connect" disabled aria-describedby="portNote">连接串口</button>
           </div>
         </section>
         <div class="stats">
@@ -179,6 +179,7 @@
                   </thead>
                   <tbody id="componentRows"></tbody>
                 </table>
+                <p id="emptyParts" hidden>还没有元件上报。取消“仅显示已上报”可查看整板清单。</p>
               </div>
             </section>
             <section id="hardware" class="tab" hidden>
@@ -396,7 +397,7 @@
               </div>
               <div class="row">
                 <button id="analyzeFromLog">分析本次测试</button
-                ><button id="pause">暂停滚动</button>
+                ><button id="pause" aria-pressed="false">暂停跟随</button>
               </div>
             </div>
             <div id="partScope" hidden>
@@ -418,6 +419,7 @@
                 <option>TX</option>
                 <option>NOTE</option></select
               ><label><input id="hex" type="checkbox" /> HEX</label>
+              <button id="clearLogFilters" hidden>清除筛选</button>
             </div>
             <div class="stream" id="stream" tabindex="0"></div>
             <div class="logfoot">
@@ -427,11 +429,12 @@
         </div>
       </div>
     </main>
-    <dialog id="dialog">
+    <dialog id="dialog" aria-labelledby="dialogTitle">
       <form method="dialog">
         <button aria-label="关闭弹窗" class="close">×</button>
       </form>
       <div id="dialogBody"></div>
+      <p id="dialogFeedback" role="alert" hidden></p>
     </dialog>
     <div id="feedback" role="status"></div>
   </body>

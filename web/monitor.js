@@ -6,6 +6,7 @@ let selectedPart = "",
   monitorRun = 0;
 const componentNodes = new Map();
 function clearPart() {
+  setLogFollow(true);
   selectedPart = "";
   partLogs = [];
   partStamp = "";
@@ -42,6 +43,7 @@ function renderComponents() {
   $("autoUsb").checked = state.auto_usb;
   const records = state.components;
   const seen = records.filter((x) => x.log_id).length;
+  $("emptyParts").hidden = !$("onlyReported").checked || seen > 0;
   $("monitorInfo").textContent =
     state.profile + " · " + seen + " / " + records.length + " 个元件有上报";
   $("monitorHelp").textContent = state.connected
@@ -57,11 +59,15 @@ function renderComponents() {
       const tr = el("tr"),
         name = el("td"),
         b = button(r.name, async () => {
+          setLogFollow(true);
           selectedPart = r.part;
           partLogs = [];
           logKey = "";
           logs(true);
+          $("partScope").hidden = false;
+          $("partName").textContent = r.name + " · 正在读取";
           await loadPart(r.part, true);
+          if (selectedPart !== r.part) return;
           renderComponents();
           if (matchMedia("(max-width:970px)").matches)
             $("stream").scrollIntoView({ block: "center" });
@@ -79,6 +85,7 @@ function renderComponents() {
     }
     node.tr.hidden = $("onlyReported").checked && !r.log_id;
     node.tr.classList.toggle("selected", r.part === selectedPart);
+    node.b.setAttribute("aria-pressed", String(r.part === selectedPart));
     node.pill.textContent = r.status;
     node.pill.className = "part-state";
     node.pill.dataset.tone = ["设备报错", "固件报错", "无应答"].includes(

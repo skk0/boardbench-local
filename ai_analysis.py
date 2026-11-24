@@ -214,7 +214,11 @@ class Analysis:
         total = db.execute("SELECT COUNT(*) FROM logs WHERE run=?", (run,)).fetchone()[
             0
         ]
-        query = "SELECT id,at,source,level,message FROM logs WHERE run=?"
+        # Older versions logged model-service errors under 操作. Device or operator
+        # messages mentioning HTTP 401 remain valid evidence.
+        query = """SELECT id,at,source,level,message FROM logs WHERE run=?
+                   AND source NOT IN ('AI 接口','会话')
+                   AND NOT (source='操作' AND message LIKE '/api/ai/%')"""
         tail = self.b.rows(
             query + " ORDER BY id DESC LIMIT ?", (run, 60 if focus == "recent" else 28)
         )
@@ -286,6 +290,8 @@ class Analysis:
                 if t["name"] not in done
             ],
         )
+        if not logs and not results:
+            return dict(ticket=None, base=self.base, model=self.model, snapshot=snap)
         ticket = secrets.token_urlsafe(18)
         self.cache[ticket] = (self.base, self.model, snap)
         while len(self.cache) > 24:

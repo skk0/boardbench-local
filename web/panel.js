@@ -7,12 +7,20 @@ const el = (tag, text) => {
 };
 let token,
   state,
-  paused = false,
+  frozenLogs = null,
+  connectionPending = "",
+  refreshSequence = 0,
+  appliedSequence = 0,
   timer,
   testKey = "",
   logKey = "",
   busy = false;
 function notice(message) {
+  if ($("dialog").open) {
+    $("dialogFeedback").textContent = message;
+    $("dialogFeedback").hidden = false;
+    return;
+  }
   $("feedback").textContent = message;
   $("feedback").className = "show";
   clearTimeout(timer);
@@ -65,7 +73,11 @@ const fmtTime = (ts) =>
   });
 function modal(title) {
   const body = $("dialogBody");
-  body.replaceChildren(el("h2", title));
+  const heading = el("h2", title);
+  heading.id = "dialogTitle";
+  body.replaceChildren(heading);
+  $("dialogFeedback").hidden = true;
+  $("dialogFeedback").textContent = "";
   if (!$("dialog").open) $("dialog").showModal();
   return body;
 }
@@ -97,6 +109,10 @@ function buttons() {
     port = Boolean($("port").value);
   const mode = $("transport").value;
   const net = mode !== "串口";
+  const input = net ? $("netPort") : $("baud");
+  const validNumber = input.value !== "" && input.validity.valid &&
+    Number.isInteger(input.valueAsNumber);
+  const ready = validNumber && (net ? Boolean($("host").value.trim()) : port);
   $("linkTitle").textContent = connected ? state.port : "连接测试设备";
   $("linkState").textContent = connected
     ? mode === "UDP"
@@ -108,7 +124,9 @@ function buttons() {
       ? "串口监视已开启 · " + state.baud + " baud"
       : "数据收发将记录在事件日志中。"
     : net
-      ? "填写板子所在的主机地址和固件监听端口。"
+      ? !$("host").value.trim() ? "请输入设备 IP 或主机名。"
+        : !validNumber ? "请输入 1–65535 之间的整数端口。" : "地址已填写，可以连接设备。"
+      : port && !validNumber ? "请输入 300–4000000 之间的整数波特率。"
       : $("portNote").dataset.usb || "正在扫描本机串口…";
   document
     .querySelector(".instrument")
@@ -123,18 +141,18 @@ function buttons() {
   $("host").disabled =
     $("netPort").disabled =
     $("transport").disabled =
-      connected || job;
-  $("connect").textContent = connected
+      connected || job || Boolean(connectionPending);
+  $("connect").textContent = connectionPending || (connected
     ? "断开连接"
     : net
       ? "连接设备"
-      : "连接串口";
-  $("connect").disabled = !connected && ((!net && !port) || job);
+      : "连接串口");
+  $("connect").disabled = Boolean(connectionPending) || (!connected && (!ready || job));
   $("port").disabled =
     $("baud").disabled =
     $("framing").disabled =
-      connected || job;
-  $("probe").disabled = $("backup").disabled = net || !port || job;
+      connected || job || Boolean(connectionPending);
+  $("probe").disabled = $("backup").disabled = net || !port || job || Boolean(connectionPending);
   $("stop").disabled = !job;
   $("all").disabled =
     !connected || job || !state.tests.some((t) => t.kind === "serial");
@@ -215,12 +233,27 @@ function tests() {
   $("tests").replaceChildren(...nodes);
   $("suite").textContent = state.profile + " · " + state.tests.length + " 项";
 }
+function currentLogs() {
+  return selectedPart ? partLogs : state?.logs || [];
+}
+function setLogFollow(follow) {
+  frozenLogs = follow ? null : currentLogs().slice();
+  $("pause").textContent = follow ? "暂停跟随" : "回到最新";
+  $("pause").setAttribute("aria-pressed", String(!follow));
+  updateLogCount();
+}
+function updateLogCount() {
+  const count = $("stream").childElementCount && $("stream").firstElementChild.matches(".line")
+    ? $("stream").childElementCount : 0;
+  $("logCount").textContent = "显示 " + count + " 条 · " +
+    (frozenLogs ? "已暂停跟随，仍在记录" : "跟随最新");
+}
 function logs(force = false) {
-  if (paused && !force) return;
+  if (!state || (frozenLogs && !force)) return;
   const query = $("search").value.toLowerCase(),
     level = $("level").value,
     hex = $("hex").checked;
-  const records = selectedPart ? partLogs : state.logs;
+  const records = frozenLogs || currentLogs();
   const key = [
     state.run,
     selectedPart,
@@ -246,6 +279,7 @@ function logs(force = false) {
         s.toLowerCase().includes(query),
       ),
   );
+  const previousTop = $("stream").scrollTop;
   $("stream").replaceChildren(
     ...lines.map((r) => {
       const line = el("div");
@@ -266,9 +300,14 @@ function logs(force = false) {
       return line;
     }),
   );
-  if (!lines.length) $("stream").append(el("p", "没有匹配的事件"));
-  $("stream").scrollTop = $("stream").scrollHeight;
-  $("logCount").textContent = "显示 " + lines.length + " 条 · 完整记录可导出";
+  $("clearLogFilters").hidden = !query && !level;
+  if (!lines.length) {
+    const message = query || level ? "当前筛选没有匹配的日志。"
+      : selectedPart ? "这个元件还没有上报日志。" : "等待本次会话的第一条日志。";
+    $("stream").append(el("p", message));
+  }
+  $("stream").scrollTop = frozenLogs ? previousTop : $("stream").scrollHeight;
+  updateLogCount();
 }
 function numeric(line) {
   try {
@@ -338,13 +377,15 @@ function plots() {
   }
 }
 async function refresh() {
-  const next = await get("/api/state"),
-    changed = state?.run !== next.run;
+  const sequence = ++refreshSequence;
+  const next = await get("/api/state");
+  if (sequence < appliedSequence) return;
+  appliedSequence = sequence;
+  const changed = state?.run !== next.run;
   state = next;
   if (changed) {
     $("profile").value = state.profile;
-    paused = false;
-    $("pause").textContent = "暂停滚动";
+    setLogFollow(true);
   }
   $("badge").textContent = state.connected
     ? "● " + state.transport + " 已打开"
@@ -400,21 +441,26 @@ async function refresh() {
   plots();
 }
 bind("scan", ports);
-bind("connect", () =>
-  state.connected
-    ? act("disconnect")
-    : $("transport").value !== "串口"
-      ? act("network", {
-          transport: $("transport").value,
-          host: $("host").value,
-          port: $("netPort").value,
-        })
-      : act("connect", {
-          port: $("port").value,
-          baud: $("baud").value,
-          framing: $("framing").value,
-        }),
-);
+bind("connect", async () => {
+  if ($("connect").disabled || connectionPending) return;
+  connectionPending = state.connected ? "正在断开…" : "正在连接…";
+  buttons();
+  try {
+    if (state.connected) await act("disconnect");
+    else if ($("transport").value === "串口") {
+      await act("connect", {
+        port: $("port").value, baud: $("baud").value, framing: $("framing").value,
+      });
+    } else {
+      await act("network", {
+        transport: $("transport").value, host: $("host").value.trim(), port: $("netPort").value,
+      });
+    }
+  } finally {
+    connectionPending = "";
+    buttons();
+  }
+});
 bind("new", () => act("new", { profile: $("profile").value }));
 bind("probe", () => {
   const body = modal("读取 ESP 芯片与 Flash");
@@ -488,10 +534,21 @@ $("transport").onchange =
   $("port").onchange =
   $("encoding").onchange =
     () => buttons();
+for (const id of ["host", "netPort", "baud"]) $(id).oninput = () => state && buttons();
 bind("pause", () => {
-  paused = !paused;
-  $("pause").textContent = paused ? "继续滚动" : "暂停滚动";
-  if (!paused) logs(true);
+  setLogFollow(Boolean(frozenLogs));
+  if (!frozenLogs) logs(true);
+});
+$("stream").addEventListener("scroll", () => {
+  const stream = $("stream");
+  if (!frozenLogs && stream.clientHeight && stream.scrollHeight - stream.clientHeight - stream.scrollTop > 12) {
+    setLogFollow(false);
+  }
+});
+bind("clearLogFilters", () => {
+  $("search").value = $("level").value = "";
+  logs(true);
+  $("search").focus();
 });
 for (const id of ["search", "level", "hex"]) $(id).oninput = () => logs(true);
 bind("history", async () => {

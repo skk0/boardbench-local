@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from aiohttp import web
@@ -143,6 +144,36 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
                 for f in Path(self.dir.name).glob("*.sqlite3*")
             )
         )
+
+    async def test_provider_errors_are_not_board_evidence(self):
+        await self.config("broken")
+        self.assertEqual((await self.post("ai/test")).status, 400)
+        await self.config()
+        self.assertEqual((await self.post("ai/test")).status, 200)
+        db = sqlite3.connect(Path(self.dir.name) / "history.sqlite3")
+        self.addCleanup(db.close)
+        def log(source, level, message):
+            with db:
+                db.execute(
+                    "INSERT INTO logs(run,at,source,level,message,raw) VALUES(?,?,?,?,?, '')",
+                    (self.run, "2026-11-24T00:00:00Z", source, level, message),
+                )
+        log("操作", "ERROR", "/api/ai/test · 模型接口返回 HTTP 401")
+        for focus in ("fault", "recent"):
+            preview = await (await self.post("ai/preview", run=self.run, focus=focus)).json()
+            self.assertIsNone(preview["ticket"])
+            self.assertEqual(preview["snapshot"]["events"], [])
+        self.assertEqual(len(self.requests), 2)
+        log("串口", "RX", "E (42) wifi: device HTTP 401")
+        for focus in ("fault", "recent"):
+            preview = await (await self.post("ai/preview", run=self.run, focus=focus)).json()
+            logs = preview["snapshot"]["events"]
+            self.assertEqual([row["text"] for row in logs], ["E (42) wifi: device HTTP 401"])
+            answer = await self.post("ai/analyze", ticket=preview["ticket"])
+            self.assertEqual(answer.status, 200)
+            self.assertEqual(json.loads(self.requests[-1][1]["messages"][-1]["content"])["events"], logs)
+        raw_logs = (await (await self.client.get("/api/state")).json())["logs"]
+        self.assertEqual(sum("401" in r["message"] for r in raw_logs), 3)
 
     async def test_vault_and_clear(self):
         b = Bench(":memory:")

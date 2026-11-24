@@ -54,7 +54,8 @@ def make_app(directory, monitor_usb=True):
         try:
             response = await handler(req)
         except (ValueError, KeyError, TypeError, OSError) as exc:
-            bench.log("ERROR", "操作", f"{req.path} · {exc}")
+            source = "AI 接口" if req.path.startswith("/api/ai/") else "操作"
+            bench.log("ERROR", source, f"{req.path} · {exc}")
             return web.json_response({"error": str(exc)}, status=400)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
