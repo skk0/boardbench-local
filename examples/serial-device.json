@@ -1,0 +1,18 @@
+{
+  "name": "示例 · 自定义串口固件",
+  "tests": [
+    {
+      "name": "查询版本",
+      "kind": "serial",
+      "step": "将 TX 和预期应答改成设备固件实际支持的内容。测试引擎按 UTF-8 发送并附加 CRLF。",
+      "tx": "VERSION?",
+      "expect": "FW_VERSION=",
+      "timeout": 4
+    },
+    {
+      "name": "显示屏",
+      "kind": "manual",
+      "step": "观察屏幕并记录实际显示的版本号。"
+    }
+  ]
+}
