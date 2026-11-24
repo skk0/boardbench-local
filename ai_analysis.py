@@ -204,7 +204,7 @@ class Analysis:
     def preview(self, run, focus, question):
         run = int(run)
         info = self.b.db.execute(
-            "SELECT profile,tests FROM runs WHERE id=?", (run,)
+            "SELECT profile,tests,port FROM runs WHERE id=?", (run,)
         ).fetchone()
         if info is None:
             raise ValueError("找不到测试会话。")
@@ -222,7 +222,9 @@ class Analysis:
         tail = self.b.rows(
             query + " ORDER BY id DESC LIMIT ?", (run, 60 if focus == "recent" else 28)
         )
-        if focus == "fault":
+        if focus == "fault" and info["port"] == "离线故障包":
+            tail = self.b.rows(query + " ORDER BY id LIMIT 129", (run,))
+        elif focus == "fault":
             bad = self.b.rows(
                 query
                 + " AND (level IN ('ERROR','WARN') OR message LIKE 'E (%' OR message LIKE 'W (%' OR message LIKE 'ERR%') ORDER BY id DESC LIMIT 12",
@@ -270,7 +272,7 @@ class Analysis:
             ).fetchone()
             smart_rows = json.loads(saved["rows"]) if saved else []
             snapshot_time = saved["at"] if saved else ""
-        smart_states = {"verified": "已验证", "fault": "异常", "observe": "需现场观察", "unknown": "证据不足"}
+        smart_states = {"verified": "已验证", "fault": "异常", "absent": "固件声明未安装", "observe": "需现场观察", "unknown": "证据不足"}
         for part in smart_rows:
             results.append(dict(
                 ref=f"R{len(results) + 1}", name="智能检测 · " + scrub(part["name"]),

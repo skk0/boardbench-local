@@ -160,6 +160,7 @@ textarea:focus-visible {
 .rail {
   position: fixed;
   inset: 0 auto 0 0;
+  overflow-y: auto;
   z-index: 3;
   width: 196px;
   background: var(--rail);
@@ -378,27 +379,80 @@ main {
   object-fit: contain;
   pointer-events: none;
 }
+.connect {
+  container-type: inline-size;
+  container-name: connection;
+}
+.instrument-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .controls {
   display: flex;
-  align-items: end;
-  gap: 10px;
   flex-wrap: wrap;
-  padding: 14px 20px;
+  gap: 12px 16px;
+  align-items: flex-end;
+  padding: 16px 24px;
 }
-.controls label {
-  min-width: 65px;
+.connection-fields {
+  display: grid;
+  width: min(100%, 582px);
+  min-width: 0;
+  grid-template-columns: 108px minmax(0, 1fr) 96px 76px;
+  gap: 10px 12px;
 }
-.controls label:has(#port),
-.controls label:has(#host) {
-  flex: 1;
-  min-width: 130px;
+.controls[data-mode="network"] .connection-fields {
+  width: min(100%, 494px);
+  grid-template-columns: 108px minmax(0, 1fr) 92px;
 }
-.controls #baud,
-.controls #netPort {
-  width: 100px;
+.connection-fields label {
+  position: relative;
+  min-width: 0;
+  line-height: 18px;
 }
-.controls button {
-  min-height: 37px;
+.connection-fields :is(select, input), .connection-actions button {
+  height: 38px;
+  min-height: 38px;
+  padding-block: 0;
+  font-size: 13px;
+}
+.connection-fields select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 26px;
+  text-overflow: ellipsis;
+}
+.connection-fields label:has(select)::after {
+  content: "";
+  position: absolute;
+  bottom: 17px;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  border: solid var(--sub);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.connection-actions, .monitor-actions, .monitor-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.connection-actions button { white-space: nowrap; }
+@container connection (max-width: 550px) {
+  .controls {
+    display: grid;
+    padding: 14px;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 12px;
+  }
+  .controls .connection-fields, .controls[data-mode="network"] .connection-actions {
+    display: contents;
+  }
+  .connection-actions { grid-column: 1 / -1; }
+  .controls[data-mode="network"] #connect { justify-self: start; }
 }
 .stats {
   display: grid;
@@ -521,6 +575,7 @@ main {
   margin: 2px 0 10px 14px;
 }
 .logpanel {
+  container-type: inline-size;
   position: sticky;
   top: 12px;
   background: #24262d;
@@ -621,6 +676,11 @@ main {
   font-size: 12px;
   color: #b9c8d4;
 }
+@container (max-width: 410px) {
+  .loghead { flex-wrap: wrap; }
+  .line { grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .line .msg { grid-column: 1 / -1; }
+}
 .logfoot a {
   color: #a5d2ff;
   text-decoration: none;
@@ -631,7 +691,7 @@ dialog {
   overflow: auto;
   border: 1px solid var(--strong);
   border-radius: 12px;
-  padding: 24px;
+  padding: 0;
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 25px 100px #06111d40;
@@ -639,9 +699,25 @@ dialog {
 dialog::backdrop {
   background: #14243483;
 }
-.close {
-  float: right;
+.dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
 }
+.dialog-head h2 { font-size: 16px; overflow-wrap: anywhere; }
+.dialog-head .close { flex: none; width: 36px; font-size: 18px; }
+#dialogBody { padding: 14px 18px 18px; }
+#dialogFeedback { margin-inline: 18px; }
+.report-downloads { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.report-downloads a { margin: 0; padding-block: 4px; font-size: 13px; }
+
 .hist {
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
@@ -696,9 +772,6 @@ dialog::backdrop {
   main {
     margin-left: 160px;
   }
-  .controls {
-    gap: 7px;
-  }
   .grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -748,7 +821,7 @@ dialog::backdrop {
     position: static;
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 2px;
     padding: 6px 10px;
     border-right: 0;
@@ -801,12 +874,6 @@ dialog::backdrop {
   .instrument-title {
     max-width: 69%;
   }
-  .controls {
-    padding: 12px;
-  }
-  .controls label:has(#transport) {
-    width: 72px;
-  }
   .stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -824,10 +891,6 @@ dialog::backdrop {
   }
   .divider {
     margin-inline: -14px;
-  }
-  .line {
-    grid-template-columns: 78px 36px 1fr;
-    font-size: 11px;
   }
   .top-tools #badge {
     font-size: 11px;
@@ -1006,10 +1069,20 @@ dialog pre {
 .suite-item p {
   margin: 3px 0 0;
 }
-.monitor-bar {
-  gap: 16px;
-  margin: 8px 0 14px;
+.monitor-summary p { margin: 2px 0 0; }
+.monitor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
 }
+.monitor-bar { gap: 6px 14px; }
+.monitor-actions button { font-size: 12px; min-height: 32px; }
+#emptyParts { padding: 14px 8px; margin: 0; }
+#monitor .section-title { flex-wrap: wrap; }
+
 .monitor-bar input {
   width: 16px;
   accent-color: var(--active);
@@ -1167,8 +1240,32 @@ dialog pre {
   background: #264762;
   border-color: #7596ae;
 }
-#emptyParts { padding: 8px; }
 .part-table tr.selected td:first-child {
   box-shadow: inset 3px 0 var(--active);
   padding-left: 10px;
 }
+
+.diagnostic-measurements {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 12px;
+}
+.diagnostic-measurements :is(td, th) {
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+}
+.diagnostic-measurements small, .diagnostic-measurements .text-link {
+  display: block;
+  color: var(--active);
+}
+
+.terminal-options label { min-width: 86px; }
+.terminal-options select, .voice-options input { height: 36px; }
+#terminal #note { margin-top: 8px; }
+.voice-options label:first-child { width: min(170px, 100%); }
+.voice-options label:nth-child(2) { width: 84px; }
+#voice #echoCheckin, .plot strong { overflow-wrap: anywhere; }
+#aiPayload:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }

@@ -13,6 +13,7 @@ class Echo:
         self.runner = self.ws = None
         self.url = self.device = ""
         self.frames = 0
+        self.checkin = None
 
     @staticmethod
     def address():
@@ -51,16 +52,33 @@ class Echo:
         self.bench.log("INFO", "小智", "局域网回声监听已启动 · " + self.base)
 
     async def ota(self, request):
-        board = await request.json()
-        device = request.headers.get("Device-Id", "")[:64]
+        try:
+            payload = await request.json()
+        except (ValueError, RecursionError):
+            raise web.HTTPBadRequest(text="签到信息需要 JSON 对象")
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest(text="签到信息需要 JSON 对象")
+        board = payload.get("board", {})
+        app = payload.get("application", {})
+        if not isinstance(board, dict) or not isinstance(app, dict):
+            raise web.HTTPBadRequest(text="board 和 application 需要是 JSON 对象")
+        device = request.headers.get("Device-Id", "")
+        if len(device) > 128:
+            raise web.HTTPBadRequest(text="设备标识过长")
         if self.device and self.device != device:
             raise web.HTTPConflict(text="测试会话已绑定其他设备")
         self.device = device
-        self.bench.log(
-            "INFO",
-            "小智",
-            f"设备签到 · {device} · {str(board.get('board', {}).get('type', '未知板型'))[:80]}",
-        )
+        fields = {}
+        for label, value in (
+            ("板型", board.get("type")), ("设备名称", board.get("name")),
+            ("芯片", payload.get("chip_model_name")), ("应用", app.get("name")),
+            ("固件版本", app.get("version")),
+        ):
+            if isinstance(value, str) and 0 < len(value) <= 96 and value.isprintable() and value.strip():
+                fields[label] = value.strip()
+        summary = " · ".join(f"{label} {value}" for label, value in fields.items())
+        log_id = self.bench.log("INFO", "小智", "设备签到 · " + (summary or "未提供型号信息"))
+        self.checkin = dict(run=self.bench.run, log_id=log_id, fields=fields)
         return web.json_response(
             {
                 "websocket": {
@@ -169,4 +187,6 @@ class Echo:
             await self.runner.cleanup()
             self.runner = None
             self.url = ""
+            self.checkin = None
+            self.device = ""
             self.bench.log("INFO", "小智", "局域网回声监听已关闭")

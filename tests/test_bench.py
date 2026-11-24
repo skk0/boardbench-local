@@ -289,6 +289,33 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f"L{row['log_id']}", report)
         self.assertIn("智能检测", report)
 
+    async def test_lifebot_lan_identity_is_scoped_and_minimized(self):
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        await self.post("echo", enable=True, host="127.0.0.1", port=port)
+        url = (await (await self.client.get("/api/state")).json())["echo"]
+        payload = {"application": {"version": "2.6.0"},
+                   "board": {"type": "bread-compact-wifi", "name": "life-bot", "mac": "ignored-serial"}}
+        async with ClientSession() as session:
+            for bad in ([], {"board": []}, {"application": None}):
+                self.assertEqual((await session.post(url, json=bad)).status, 400)
+            hdr = {"Device-Id": "private-device-id"}
+            self.assertEqual((await session.post(url, json=payload, headers=hdr)).status, 200)
+            state = await (await self.client.get("/api/state")).json()
+            self.assertFalse(state["device_identity"])
+            report = state["echo_checkin"]
+            self.assertEqual(report["fields"], {"板型": "bread-compact-wifi", "设备名称": "life-bot", "固件版本": "2.6.0"})
+            log = next(r for r in state["logs"] if r["id"] == report["log_id"])
+            self.assertNotIn("private-device-id", log["message"])
+            self.assertNotIn("ignored-serial", log["message"])
+            self.assertEqual((await session.post(url, json=payload, headers={"Device-Id": "other"})).status, 409)
+            self.assertEqual((await session.post(url, json={"board": {"type": "variant"}}, headers=hdr)).status, 200)
+            state = await (await self.client.get("/api/state")).json()
+            self.assertEqual(state["echo_checkin"]["fields"], {"板型": "variant"})
+        await self.post("echo", enable=False)
+        self.assertIsNone((await (await self.client.get("/api/state")).json())["echo_checkin"])
+
     async def test_local_audio_roundtrip(self):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))

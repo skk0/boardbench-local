@@ -70,9 +70,11 @@ const renderOverview = (() => {
     const errors = rows.filter(r => faults.has(r.status)), expired = rows.filter(r => r.status === "上报超时");
     const stats = [["已上报元件", live ? seen.length : "—"], ["设备异常", connected ? errors.length : "—"], ["上报超时", connected ? expired.length : "—"]];
     metrics("Stats", stats);
-    const pct = rows.length ? Math.round(100 * seen.length / rows.length) : null;
+    const expected = rows.filter(r => r.expected);
+    const reported = expected.filter(r => r.log_id).length;
+    const pct = expected.length ? Math.round(100 * reported / expected.length) : null;
     ring("Coverage", pct, pct === null ? "—" : pct + "%");
-    list("BoardInfo", [["有记录 / 总数", live ? seen.length + " / " + rows.length : "—"], ["板型", live?.profile || "—"],
+    list("BoardInfo", [["清单上报 / 适用项", expected.length ? reported + " / " + expected.length : "—"], ["检测配置", live?.profile || "—"],
       ["接收 / 发送", live ? live.rx.toLocaleString() + " / " + live.tx.toLocaleString() + " B" : "—"]]);
     const shown = rows.filter(r => filter === "all" || (filter === "reported" ? r.log_id : faults.has(r.status) || r.status === "上报超时"));
     const area = idx("Parts");
@@ -89,6 +91,7 @@ const renderOverview = (() => {
         };
         area.append(item);
       }
+      item.children[0].textContent = r.model ? r.name + " · " + r.model : r.name;
       item.disabled = !r.log_id;
       item.children[1].textContent = r.status;
       item.children[2].textContent = r.value || "—";
@@ -107,7 +110,7 @@ const renderOverview = (() => {
     return { number, other, spark };
   }
   const cards = energyRails.map(card);
-  function graph(canvas, series, from, to, axes, data = points) {
+  function graph(canvas, series, from, to, axes, data = points, gapMs = 90000) {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
     const scale = Math.min(devicePixelRatio || 1, 2);
@@ -149,7 +152,7 @@ const renderOverview = (() => {
         if (p.time < from || p.time > to) continue;
         const v = p.values[s.key];
         if (!Number.isFinite(v)) { prev=null; continue; }
-        if (prev === null || p.time - prev > 90000 || p.time < prev) {g.moveTo(x(p.time),y(v));g.fillRect(x(p.time)-1,y(v)-1,2,2);}
+        if (prev === null || p.time - prev > gapMs || p.time < prev) {g.moveTo(x(p.time),y(v));g.fillRect(x(p.time)-1,y(v)-1,2,2);}
         else g.lineTo(x(p.time),y(v));
         prev = p.time;
       }
@@ -178,6 +181,7 @@ const renderOverview = (() => {
     if (live) idx("Csv").href="/api/report/"+live.run+"/csv";
     else idx("Csv").removeAttribute("href");
     const current = live?.connected && row?.status === "有读数" && !readError && last && last.id >= row.log_id ? last : null;
+    const gapMs = row?.timeout === null ? Infinity : (row?.timeout ?? 90) * 1000;
     const v = current?.values || {};
     const now = Date.now(), from = now - Number(idx("Span").value)*60000, unit = idx("Unit").value;
     const series = energyRails.map(r => ({...r, key:r.key+"_"+unit}));
@@ -185,7 +189,7 @@ const renderOverview = (() => {
       const c = cards[i], k = r.key;
       c.number.replaceChildren(document.createTextNode(measure(v[k+"_v"],"")),el("small","V"));
       c.other.textContent = "电流 " + measure(v[k+"_a"],"A") + "　功率 " + measure(v[k+"_w"],"W");
-      graph(c.spark,[{key:k+"_v",color:r.color}],from,now,false);
+      graph(c.spark,[{key:k+"_v",color:r.color}],from,now,false,points,gapMs);
     }
     ring("Soc",v.soc_pct,measure(v.soc_pct,"%"));
     list("BatteryInfo",[["剩余电量",measure(v.soc_pct,"%")],["健康状态",measure(v.soh_pct,"%")],["电池温度",measure(v.battery_c,"°C")],
@@ -193,7 +197,7 @@ const renderOverview = (() => {
     idx("Legend").replaceChildren(...series.map(r => {
       const n = el("span",r.name+" "+measure(v[r.key],energyUnits[unit]));n.className="ov-dot";n.style.setProperty("--series","var(--"+r.color+")");return n;
     }));
-    graph(idx("Trend"),series,from,now,true);
+    graph(idx("Trend"),series,from,now,true,points,gapMs);
     const count = points.filter(p => p.time >= from && p.time <= now && series.some(s => Number.isFinite(p.values[s.key]))).length;
     const note = readError ? "读取本地能源日志失败，正在重试。" : !live?.connected ? "等待设备连接。" :
       !row ? "等待 power 遥测帧。可通过串口、TCP 或 UDP 上报。" : row.status !== "有读数" ? "能源遥测 · " + row.status :

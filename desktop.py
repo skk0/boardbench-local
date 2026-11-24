@@ -64,7 +64,11 @@ def run_window(port, make_service, smoke=False):
                     if not window.events.loaded.wait(50):
                         raise RuntimeError("桌面窗口未载入")
                     for _ in range(100):
-                        if window.evaluate_js("document.querySelectorAll('#componentRows tr').length > 0"):
+                        if window.evaluate_js(
+                            "document.querySelector('#emptyParts')?.hidden === false && "
+                            "document.querySelectorAll('#componentRows tr').length === 0 && "
+                            "document.querySelector('#monitorInfo').textContent.includes('0 个元件有上报')"
+                        ):
                             interactions_ok = window.evaluate_js("""
                                 (() => {
                                     const byId = id => document.getElementById(id);
@@ -87,7 +91,11 @@ def run_window(port, make_service, smoke=False):
                             if not interactions_ok:
                                 raise RuntimeError("桌面窗口连接校验或日志交互异常")
                             window.evaluate_js("document.querySelector('[data-tab=overview]').click()")
-                            if not window.evaluate_js("document.querySelectorAll('#ovParts button').length > 0"):
+                            if not window.evaluate_js(
+                                "document.querySelector('#ovParts p')?.textContent === '当前筛选没有元件。' && "
+                                "document.querySelectorAll('#ovParts button').length === 0 && "
+                                "document.querySelector('#ovCoverage strong').textContent === '—'"
+                            ):
                                 raise RuntimeError("未显示板卡总览")
                             window.evaluate_js("document.querySelector('#ovPowerTab').click()")
                             if not window.evaluate_js("!document.querySelector('#ovPower').hidden && document.querySelectorAll('#ovPowerCards canvas').length === 3"):
@@ -129,7 +137,7 @@ def run_window(port, make_service, smoke=False):
                             break
                         time.sleep(0.15)
                     else:
-                        raise RuntimeError("桌面窗口未显示元件列表")
+                        raise RuntimeError("桌面窗口未显示通用设备的零上报状态")
                 except Exception as exc:
                     checked.set_exception(exc)
                 finally:

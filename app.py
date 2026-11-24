@@ -23,6 +23,9 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--esp-worker"]:
     sys.exit(0)
 
 from aiohttp import web
+import faultpack
+from replies import try_sample
+from profiles import validate
 import replay
 import vcd_export
 from ai_analysis import Analysis
@@ -44,6 +47,7 @@ def make_app(directory, monitor_usb=True):
     token = secrets.token_urlsafe(24)
     lock = asyncio.Lock()
     auto = AutoUSB(bench, lock)
+    faultpack.install(bench.db)
 
     @web.middleware
     async def policy(req, handler):
@@ -86,7 +90,7 @@ def make_app(directory, monitor_usb=True):
 
     @routes.get("/api/ports")
     async def ports(req):
-        return web.json_response(await asyncio.to_thread(bench.ports))
+        return web.json_response(auto.describe(await asyncio.to_thread(bench.ports)))
 
     @routes.get("/api/state")
     async def state(req):
@@ -114,14 +118,18 @@ def make_app(directory, monitor_usb=True):
                 job=bench.taskname,
                 suite=suite.state(),
                 storage_hold=bench.storage_hold,
+                device_identity=bench.components.identity if bench.ser else {},
                 components=bench.components.states(bench.profile, bool(bench.ser)),
                 auto_usb=auto.enabled,
                 usb_message=auto.message,
-                usb_ports=auto.online,
+                remembered_usb=auto.known(),
+                endurance=bench.endurance.active and {k:bench.endurance.active[k] for k in ("id","started","minutes","variant")},
+                usb_ports=auto.describe(auto.online),
                 rx=bench.rx,
                 tx=bench.tx,
                 logs=logs,
                 echo=echo.url,
+                echo_checkin=echo.checkin,
                 frames=echo.frames,
             )
         )
@@ -207,7 +215,7 @@ def make_app(directory, monitor_usb=True):
             smart_reports = list(data["smart_reports"])
             if "smart_live" in data:
                 smart_reports.append(dict(reason="导出时的实时观测", at="", **data["smart_live"]))
-            labels = {"verified": "已验证", "fault": "异常", "unknown": "证据不足", "observe": "待观察"}
+            labels = {"verified": "已验证", "fault": "异常", "unknown": "证据不足", "observe": "待观察", "absent": "固件声明未安装"}
             for snapshot in smart_reports:
                 rows.extend(["", f"智能检测 · {snapshot['reason']}  {snapshot['at']}"])
                 for item in snapshot["rows"]:
@@ -291,6 +299,26 @@ def make_app(directory, monitor_usb=True):
         await response.write_eof()
         return response
 
+    @routes.get("/api/endurance")
+    async def endurance_history(req):
+        return web.json_response(bench.endurance.history())
+
+    @routes.get("/api/fault-pack/{run}")
+    async def fault_preview(req):
+        return web.json_response(await faultpack.excerpt(bench, int(req.match_info["run"])))
+
+    @routes.post("/api/fault-pack/import")
+    async def import_pack(req):
+        payload = await req.clone(client_max_size=faultpack.LIMIT).json()
+        async with lock:
+            return web.json_response({"run": faultpack.read_pack(bench, payload)})
+
+    @routes.post("/api/profile/sample")
+    async def profile_sample(req):
+        data = await req.json()
+        _, tests = validate({"name":"试跑","tests":[data["test"]]})
+        return web.json_response({"outcome":try_sample(tests[0], data["sample"])})
+
     @routes.post("/api/{op}")
     async def command(req):
         d = await req.json()
@@ -304,9 +332,23 @@ def make_app(directory, monitor_usb=True):
                 await bench.select_profile(d["profile"])
             elif op == "import":
                 bench.add_profile(d["data"])
+            elif op == "cadence":
+                bench.components.set_rule(d["part"], d["mode"], d.get("seconds"))
+            elif op == "usb-name":
+                auto.rename(d["identity"], d["name"])
+            elif op == "endurance-start":
+                bench.endurance.start(bench, d["variant"], d["minutes"])
+            elif op == "endurance-stop":
+                bench.endurance.stop()
+            elif op == "endurance-reference":
+                bench.endurance.baseline(d["record"])
             elif op == "auto-usb":
                 auto.enable(d["enabled"] is True)
             elif op == "connect":
+                if bench.usb and not bench.ser and not bench.job:
+                    if echo.runner:
+                        raise ValueError("请先结束当前回声会话再换设备。")
+                    await bench.select_profile(bench.profile if bench.usb == d["port"] else "通用串口设备")
                 bench.connect(d["port"], int(d["baud"]), d.get("framing", "8N1"))
                 auto.remember(d["port"], int(d["baud"]), d.get("framing", "8N1"))
             elif op == "network":

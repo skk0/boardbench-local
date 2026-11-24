@@ -83,8 +83,12 @@ def _verdict(bench, row):
         return "unknown", "等待设备连接并输出本次检测的证据。"
     if state == "上报超时":
         return "unknown", "周期上报已中断，等待新的板端读数。"
+    if state == "固件声明未安装":
+        return "absent", "固件声明此元件未安装。" + value
     if state in ("设备报错", "固件报错", "无应答"):
         return "fault", f"本次收到板端报告 · {state}。{value}"
+    if state in ("未上报", "未启用", "未提供读数"):
+        return "unknown", state + (f" · {value}" if value else "。")
     if part in OBSERVATIONS:
         return "observe", OBSERVATIONS[part] + (f" 板端记录 · {value}" if value else "")
     if state == "固件日志":
@@ -92,8 +96,6 @@ def _verdict(bench, row):
         if detail:
             return "verified", detail + " " + value
         return "unknown", "收到固件日志，尚无可据以判定的测试结果。"
-    if state in ("未上报", "未启用", "未提供读数"):
-        return "unknown", state + (f" · {value}" if value else "。")
     if part == "usb":
         if (
             bench.transport == "串口"
@@ -148,10 +150,17 @@ def _verdict(bench, row):
 def evaluate(bench):
     """Return one evidence-scoped result per monitored part without sending commands."""
     rows = []
-    for component in bench.components.states(bench.profile, bool(bench.ser)):
+    components = bench.components.states(bench.profile, bool(bench.ser))
+    serial_rx = bench.current_rx_log_id if bench.ser and bench.transport == "串口" else None
+    if serial_rx and all(row["part"] != "usb" for row in components):
+        rows.append(dict(id="serial:rx", name="串口接收", status="verified",
+                         detail="本次连接已通过串口收到数据。", log_id=serial_rx))
+    for component in components:
         status, detail = _verdict(bench, component)
         log_id = component["log_id"]
         name = component["name"]
+        if component["model"]:
+            name += " · " + component["model"]
         if status == "verified" and component["status"] == "有应答":
             name += " · 总线应答"
         elif (
@@ -169,7 +178,7 @@ def evaluate(bench):
             log_id = max(release for _, release in cycles.values())
         if component["part"] == "usb" and bench.ser and bench.transport == "串口":
             received = getattr(bench, "current_rx_log_id", None)
-            if received and status != "fault":
+            if received and status not in ("fault", "absent"):
                 name = "串口接收"
                 status = "verified"
                 detail = "本次连接已通过串口收到数据。USB OTG 功能另需对应固件和设备。"

@@ -72,13 +72,14 @@ const fmtTime = (ts) =>
     fractionalSecondDigits: 3,
   });
 function modal(title) {
-  const body = $("dialogBody");
-  const heading = el("h2", title);
-  heading.id = "dialogTitle";
-  body.replaceChildren(heading);
+  const body = el("div");
+  body.id = "dialogBody";
+  $("dialogBody").replaceWith(body);
+  $("dialogTitle").textContent = title;
   $("dialogFeedback").hidden = true;
   $("dialogFeedback").textContent = "";
   if (!$("dialog").open) $("dialog").showModal();
+  $("dialog").scrollTop = 0;
   return body;
 }
 async function setup() {
@@ -94,10 +95,11 @@ async function ports() {
   const rows = await get("/api/ports");
   const old = $("port").value;
   $("port").replaceChildren(
-    ...rows.map((x) => new Option(x.path + " · " + x.label, x.path)),
+    ...rows.map((x) => new Option(x.path + " · " + (x.saved?.name || x.label), x.path)),
   );
   if (!rows.length) $("port").add(new Option("等待 USB 串口", ""));
   if (rows.some((x) => x.path === old)) $("port").value = old;
+  portSettings(rows);
   $("portNote").dataset.usb = rows.length
     ? "发现 " + rows.length + " 个串口 · 请选择当前设备"
     : "未发现 USB 串口。插入数据线后点击扫描。";
@@ -109,6 +111,7 @@ function buttons() {
     port = Boolean($("port").value);
   const mode = $("transport").value;
   const net = mode !== "串口";
+  $("transport").closest(".controls").dataset.mode = net ? "network" : "serial";
   const input = net ? $("netPort") : $("baud");
   const validNumber = input.value !== "" && input.validity.valid &&
     Number.isInteger(input.valueAsNumber);
@@ -400,22 +403,31 @@ async function refresh() {
   $("echoInfo").textContent = state.echo
     ? "正在监听 · 收到 " + state.frames + " 个音频帧"
     : "服务已关闭";
+  const checkin = state.echo_checkin;
+  const checkinLink = $("echoCheckin");
+  checkinLink.hidden = !checkin;
+  if (checkin) {
+    const summary = Object.entries(checkin.fields).map(([k, v]) => k + " " + v).join(" · ");
+    checkinLink.textContent = "最近局域网签到 · " + (summary || "未提供型号信息") + " · L" + checkin.log_id;
+    checkinLink.onclick = handle(() => showEvidence({run: checkin.run}, "L" + checkin.log_id));
+  }
   $("logCSV").href = "/api/report/" + state.run + "/csv";
   $("template").href =
     "/api/template?name=" + encodeURIComponent($("profile").value);
   if (
     state.usb_ports &&
     $("port").dataset.paths !==
-      JSON.stringify(state.usb_ports.map((x) => x.path))
+      JSON.stringify(state.usb_ports)
   ) {
     const chosen = $("port").value;
     const rows = state.usb_ports;
-    $("port").dataset.paths = JSON.stringify(rows.map((x) => x.path));
+    $("port").dataset.paths = JSON.stringify(rows);
     $("port").replaceChildren(
-      ...rows.map((x) => new Option(x.path + " · " + x.label, x.path)),
+      ...rows.map((x) => new Option(x.path + " · " + (x.saved?.name || x.label), x.path)),
     );
     if (!rows.length) $("port").add(new Option("等待 USB 串口", ""));
     if (rows.some((x) => x.path === chosen)) $("port").value = chosen;
+    portSettings(rows);
     $("portNote").dataset.usb = rows.length
       ? "已发现 " + rows.length + " 个串口"
       : "请使用 USB 数据线连接设备。";
@@ -434,6 +446,7 @@ async function refresh() {
   buttons();
   tests();
   renderSuite();
+  $("endurance").textContent = state.endurance ? "长测中 · " + state.endurance.variant : "稳定性长测";
   renderComponents();
   renderOverview(state);
   renderMotion(state);
@@ -517,11 +530,7 @@ $("file").onchange = handle(async () => {
   if (!f) return;
   try {
     const data = JSON.parse(await f.text());
-    await act("import", { data });
-    await setup();
-    $("profile").value = data.name.trim();
-    $("profile").onchange();
-    notice("配置已导入，点击新建测试即可使用。");
+    previewProfile(data);
   } finally {
     $("file").value = "";
   }
@@ -532,7 +541,6 @@ $("profile").onchange = () => {
   if (state) renderSuite();
 };
 $("transport").onchange =
-  $("port").onchange =
   $("encoding").onchange =
     () => buttons();
 for (const id of ["host", "netPort", "baud"]) $(id).oninput = () => state && buttons();
@@ -555,6 +563,7 @@ for (const id of ["search", "level", "hex"]) $(id).oninput = () => logs(true);
 bind("history", async () => {
   const rows = await get("/api/history");
   const body = modal("测试历史与报告");
+  archiveTools(body);
   for (const r of rows) {
     const box = el("div");
     box.className = "hist";
@@ -565,17 +574,23 @@ bind("history", async () => {
         new Date(r.started).toLocaleString() + " · " + (r.port || "未绑定设备"),
       ),
     );
+    const downloads = el("div");
+    downloads.className = "report-downloads";
     for (const f of ["txt", "json", "csv"]) {
       const a = el("a", f.toUpperCase() + " ↓");
       a.href = "/api/report/" + r.id + "/" + f;
-      box.append(a);
+      downloads.append(a);
     }
+    box.append(downloads);
     for (const f of r.backups || []) {
       const a = el("a", "Flash 备份 ↓");
       a.href = "/api/backup/" + f.id;
       box.append(a, el("p", "SHA-256 " + f.sha256));
     }
-    box.append(
+    const actions = el("div");
+    actions.className = "row";
+    actions.append(
+      button("分享故障记录", () => previewPack(r.id)),
       button("回放", () => {
         $("dialog").close();
         openReplay(r.id);
@@ -585,6 +600,7 @@ bind("history", async () => {
         openAnalysis(r.id);
       }),
     );
+    box.append(actions);
     body.append(box);
   }
 });
@@ -628,7 +644,7 @@ bind("theme", () => {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("boardbench.theme", theme);
 });
-(async () => {
+document.addEventListener("DOMContentLoaded", async () => {
   try {
     await setup();
     await ports();
@@ -651,4 +667,4 @@ bind("theme", () => {
       busy = false;
     }
   }, 900);
-})();
+});

@@ -71,14 +71,15 @@ function motionReading(state, now = Date.now()) {
   if (row.status !== "有读数") return { reason: "六轴传感器 · " + row.status };
   const at = Date.parse(row.at);
   const age = now - at;
-  if (!Number.isFinite(age) || age < -1000 || age > 8000)
+  const maxAge = row.timeout === null ? Infinity : (row.timeout ?? 8) * 1000;
+  if (!Number.isFinite(age) || age < -1000 || age > maxAge)
     return { reason: "六轴读数已过期" };
   const values = motionChannels(row.value).map(([, v]) => v);
   if (!values.length) return { reason: "需要带 g 和 °/s 单位的六轴数据" };
   const [ax, ay, az, gx, gy, gz] = values;
   const g = Math.hypot(ax, ay, az);
   const speed = Math.hypot(gx, gy, gz);
-  const sample = { g, speed, values, logId: row.log_id, at };
+  const sample = { g, speed, values, logId: row.log_id, maxAge, at };
   if (Math.abs(g - 1) > 0.12 || speed > 8)
     return { ...sample, reason: "运动或读数偏离静置范围" };
   return { ...sample, gravity: [ax / g, ay / g, az / g] };
@@ -105,7 +106,7 @@ function advanceMotionSampling(session, reading) {
     return;
   }
   if (reading.logId <= session.lastId || reading.at < session.startedAt) return;
-  if (reading.at - session.lastAt > 8000 || reading.at < session.lastAt) {
+  if (reading.at - session.lastAt > (reading.maxAge ?? 8000) || reading.at < session.lastAt) {
     session.status = "采样时间不连续";
     return;
   }

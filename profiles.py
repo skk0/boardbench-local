@@ -1,5 +1,8 @@
 """Built-in inspection plans. A plan describes firmware capabilities, never guessed pins."""
 
+import re
+from replies import ReplyMatch, try_sample
+
 
 def manual(name, step):
     return {"name": name, "step": step, "kind": "manual"}
@@ -171,6 +174,21 @@ BUILTINS = {
 }
 
 
+# Test names are local to built-ins. Imported profiles declare their own component IDs.
+BOX_PARTS = {
+    "LCD 显示": "lcd", "K0 / K1 / K2": "buttons", "麦克风采集": "mic",
+    "扬声器播放": "speaker", "Wi-Fi 联网": "wifi", "双色 LED": "led",
+    "蜂鸣器": "buzzer", "姿态传感器": "imu", "环境光": "light", "TF 卡": "sd",
+    "EEPROM": "eeprom", "PSRAM": "psram", "触摸（选装 / 需驱动）": "touch",
+    "摄像头（选装）": "camera", "蓝牙 BLE": "ble", "PH2.0 扩展接口": "expansion",
+    "PSRAM 读写": "psram", "Wi-Fi 扫描": "wifi", "板载 I²C 总线": "i2c",
+}
+for tests in BUILTINS.values():
+    for test in tests:
+        if test["name"] in BOX_PARTS:
+            test["part"] = BOX_PARTS[test["name"]]
+
+
 def validate(data):
     name = data.get("name", "")
     rows = data.get("tests")
@@ -188,6 +206,9 @@ def validate(data):
         for k in ["name", "step"] + (["tx", "expect"] if r["kind"] == "serial" else []):
             if not isinstance(r.get(k), str) or not 1 <= len(r[k].strip()) <= 2048:
                 raise ValueError(f"项目缺少有效的 {k}。")
+        if "part" in r and (not isinstance(r["part"], str)
+                            or not re.fullmatch(r"[a-z0-9_.-]{1,40}", r["part"])):
+            raise ValueError("part 应为 1–40 个小写字母、数字、点、下划线或连字符。")
         if "group" in r and (
             not isinstance(r["group"], str) or not 1 <= len(r["group"].strip()) <= 60
         ):
@@ -214,4 +235,10 @@ def validate(data):
             if r.get("encoding") == "hex":
                 for key in ("tx", "expect", "reject"):
                     bytes.fromhex(r.get(key, ""))
+            ReplyMatch(r)
+            for field, desired in (("success_sample", "通过"), ("failure_sample", "非通过")):
+                if field in r:
+                    result = try_sample(r, r[field])
+                    if (result == "通过") != (desired == "通过"):
+                        raise ValueError(f"{r['name']} 的 {field} 试跑结果为{result}，请检查匹配规则。")
     return name.strip(), rows

@@ -20,6 +20,8 @@ import serial
 from serial.tools import list_ports
 from smart import evaluate
 from monitor import Components
+from endurance import Endurance
+from replies import ReplyMatch
 from profiles import BUILTINS, validate
 
 
@@ -97,6 +99,7 @@ class Bench:
         CREATE TABLE IF NOT EXISTS backups(id TEXT PRIMARY KEY, run INTEGER, size INTEGER, sha256 TEXT);
         CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, run INTEGER, at TEXT, level TEXT, source TEXT, message TEXT, raw TEXT);
         CREATE INDEX IF NOT EXISTS run_logs ON logs(run,id);
+        CREATE TABLE IF NOT EXISTS capture_info(run INTEGER PRIMARY KEY,settings TEXT);
         CREATE TABLE IF NOT EXISTS results(run INTEGER, name TEXT, state TEXT, detail TEXT, at TEXT, PRIMARY KEY(run,name));
         """)
         self.ser = self.reader = self.job = self.waiter = self.proc = None
@@ -109,9 +112,10 @@ class Bench:
         self.network_host = ""
         self.network_port = 0
         self.rx = self.tx = 0
+        self.endurance = Endurance(self.db)
         self.components = Components(self.db)
         previous = self.db.execute(
-            "SELECT profile FROM runs ORDER BY id DESC LIMIT 1"
+            "SELECT profile FROM runs WHERE port != '离线故障包' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         self.new(
             previous[0]
@@ -159,9 +163,12 @@ class Bench:
         if keep_connection and self.ser and self.current_rx_log_id:
             self.save_smart("切换检测配置")
         self.current_rx_log_id = None
-        self.components.last.clear()
+        self.endurance.stop("会话切换")
+        self.components.reset()
+        self.capture_key = None
         self.tests = self.profiles()[profile]
         self.profile = profile
+        self.components.use_profile(profile)
         self.run = self.db.execute(
             "INSERT INTO runs(started,profile,tests) VALUES(?,?,?)",
             (stamp(), profile, json.dumps(self.tests, ensure_ascii=False)),
@@ -169,6 +176,18 @@ class Bench:
         self.usb = ""
         self.rx = self.tx = 0
         self.log("INFO", "会话", "开始测试 · " + profile)
+
+    def capture_settings(self):
+        settings = {"连接": self.transport}
+        if self.transport == "串口":
+            settings.update(波特率=str(self.baud), 格式=self.framing)
+        for key, label in (("board", "固件板型"), ("firmware", "固件"), ("chip", "芯片"), ("version", "固件版本")):
+            if entry := self.components.identity.get(key):
+                settings[label] = entry["value"]
+        if settings != self.capture_key:
+            self.db.execute("INSERT OR REPLACE INTO capture_info VALUES(?,?)",
+                            (self.run,json.dumps(settings,ensure_ascii=False)))
+            self.capture_key = settings
 
     def log(self, level, source, message, raw=""):
         at = stamp()
@@ -178,8 +197,13 @@ class Bench:
         )
         if level == "RX":
             self.current_rx_log_id = row.lastrowid
-            self.components.observe(self.db, self.run, row.lastrowid, at, message)
+            reboot = self.components.observe(self.db, self.run, row.lastrowid, at, message)
+            self.capture_settings()
+            self.endurance.observe(self, message, row.lastrowid, reboot)
+            if reboot:
+                self.connection_id += 1
         self.db.commit()
+        return row.lastrowid
 
     def result(self, name, state, detail):
         self.db.execute(
@@ -301,13 +325,14 @@ class Bench:
         handle.port = port
         handle.open()
         self.current_rx_log_id = None
-        self.components.last.clear()
+        self.components.reset()
         self.ser = handle
         self.connection_id += 1
         self.transport = "串口"
         self.bind(port)
         self.baud = baud
         self.framing = framing
+        self.capture_settings()
         self.log("INFO", "串口", f"已连接 {port} · {baud} {framing}")
         self.reader = asyncio.create_task(self.read_loop())
 
@@ -320,13 +345,14 @@ class Bench:
         if self.ser or self.job or (self.usb and self.usb != address):
             raise ValueError("请结束当前连接，换设备时先新建测试。")
         self.current_rx_log_id = None
-        self.components.last.clear()
+        self.components.reset()
         self.ser = await NetworkPort.connect(host, port, transport)
         self.connection_id += 1
         self.transport = transport
         self.network_host = host
         self.network_port = port
         self.bind(address)
+        self.capture_settings()
         self.log(
             "INFO",
             transport,
@@ -389,24 +415,21 @@ class Bench:
 
     def feed(self, data):
         if self.waiter:
-            future, needle, reject, buf, test_hex = self.waiter
-            buf.extend(data)
-            if reject and reject in buf and not future.done():
-                future.set_exception(
-                    ValueError(
-                        "设备报告失败 · " + buf.decode("utf-8", "replace")[-1024:]
-                    )
-                )
-            if needle in buf and not future.done():
-                future.set_result(
-                    buf.hex(" ")[-2048:]
-                    if test_hex
-                    else buf.decode("utf-8", "replace")[-2048:]
-                )
-            if len(buf) > 8192:
-                del buf[:-4096]
+            future, matcher, recent = self.waiter
+            if future.done():
+                return
+            recent.extend(data)
+            del recent[:-2048]
+            reply = matcher.feed(data, datagram=self.transport == "UDP")
+            if reply:
+                detail = recent.hex(" ") if matcher.hex else recent.decode("utf-8", "replace")
+                if reply == "失败":
+                    future.set_exception(ValueError("设备报告失败 · " + detail))
+                else:
+                    future.set_result(detail)
 
     def close_port(self):
+        self.endurance.stop("连接中断")
         if self.ser:
             try:
                 if self.current_rx_log_id and not self.storage_hold:
@@ -462,8 +485,18 @@ class Bench:
         self.taskname = name
         self.job = asyncio.create_task(runner())
 
+    def skip_if_absent(self, test):
+        part = self.components.last.get(test.get("part"), {})
+        if self.ser and part.get("status") == "固件声明未安装":
+            detail = f"固件声明未安装 · {test['part']} · L{part['log_id']}"
+            self.result(test["name"], "跳过", detail)
+            return dict(state="跳过", detail=detail)
+        return None
+
     async def cases(self, items):
         for test in items:
+            if self.skip_if_absent(test):
+                continue
             name = test["name"]
             self.log(
                 "INFO",
@@ -476,13 +509,7 @@ class Bench:
             suffix = ending[
                 test.get("ending", "none" if test.get("encoding") == "hex" else "CRLF")
             ]
-            self.waiter = (
-                future,
-                encode(test["expect"]),
-                encode(test.get("reject", "")),
-                bytearray(),
-                test.get("encoding") == "hex",
-            )
+            self.waiter = (future, ReplyMatch(test), bytearray())
             try:
                 self.send(encode(test["tx"]) + suffix)
                 reply = await asyncio.wait_for(future, test.get("timeout", 5))

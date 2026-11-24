@@ -112,9 +112,8 @@ async function loadRunResults() {
 async function showEvidence(rec, ref) {
   const box = modal("证据 " + ref + " · 会话 #" + rec.run);
   if (ref.startsWith("L")) {
-    const heading = box.firstElementChild;
     const entry = await get("/api/ai/evidence/" + rec.run + "/" + ref.slice(1));
-    if (!$("dialog").open || box.firstElementChild !== heading) return;
+    if (!$("dialog").open || !box.isConnected) return;
     box.append(
       el("p", entry.at + " · " + entry.source + " · " + entry.level),
       el("pre", entry.message),
@@ -262,6 +261,7 @@ bind("aiPreview", () =>
           " 项检测记录",
       ),
     );
+    if (!$("analysis").hidden) area.focus();
     if (!preview.ticket) {
       area.append(el("p", "所选会话还没有诊断日志或检测记录。连接板子采集输出，或选择已有记录的测试会话。"));
       area.append(button("查看元件监视", () => document.querySelector('[data-tab="monitor"]').click()));

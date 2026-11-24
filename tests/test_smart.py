@@ -52,6 +52,46 @@ class SmartChecks(unittest.TestCase):
         self.bench.ser = None
         self.assertTrue(all(r["status"] == "unknown" for r in self.rows().values()))
 
+    def test_generic_inventory_and_device_reported_models(self):
+        bench = self.bench
+        bench.add_profile({"name": "客户 BOX", "tests": [
+            {"kind": "manual", "name": "上电", "step": "观察"}
+        ]})
+        bench.new("客户 BOX", keep_connection=True)
+        self.assertEqual(self.rows(), {})
+        bench.log("RX", "串口", "ordinary text")
+        self.assertEqual(set(self.rows()), {"serial:rx"})
+        for model in ("TMP117", "TMP102"):
+            bench.log("RX", "串口", json.dumps(dict(
+                bb=1, part="temperature", model=model, status="sample", value="24 C"
+            )))
+            self.report("temperature", "sample", "25 C")
+            rows = self.rows()
+            self.assertEqual(set(rows), {"temperature", "serial:rx"})
+            self.assertIn(model, rows["temperature"]["name"])
+            self.assertEqual(rows["temperature"]["status"], "verified")
+        bench.new("通用串口设备", keep_connection=True)
+        self.assertEqual(self.rows(), {})
+        self.report("temperature", "sample", "20 C")
+        self.assertNotIn("TMP", self.rows()["temperature"]["name"])
+
+    def test_absence_is_explicit_and_scoped_to_current_connection(self):
+        self.assertEqual(self.rows()["camera"]["status"], "unknown")
+        self.report("camera", "unavailable", "no driver")
+        self.assertEqual(self.rows()["camera"]["status"], "unknown")
+        self.report("camera", "missing", "no reply")
+        self.assertEqual(self.rows()["camera"]["status"], "fault")
+        self.report("camera", "absent", "variant without camera")
+        self.bench.components.last["camera"]["tick"] -= 60
+        row = self.rows()["camera"]
+        self.assertEqual(row["status"], "absent")
+        self.assertIsInstance(row["log_id"], int)
+        component = next(r for r in self.bench.components.states(self.bench.profile, True)
+                         if r["part"] == "camera")
+        self.assertFalse(component["expected"])
+        self.bench.new(self.bench.profile, keep_connection=True)
+        self.assertEqual(self.rows()["camera"]["status"], "unknown")
+
     def test_ordinary_firmware_reports_are_specific(self):
         for msg, expected in (
             ("I (91) wifi: state: auth -> run (0x10)", "verified"),

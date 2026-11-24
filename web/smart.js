@@ -3,6 +3,7 @@
 const smartLabels = {
   verified: "已验证",
   fault: "异常",
+  absent: "固件声明未安装",
   observe: "需现场观察",
   unknown: "证据不足",
 };
@@ -80,7 +81,7 @@ function renderSmart(data) {
   $("smartLive").textContent = "自动检测中";
   $("smartLive").classList.add("live");
   $("smartSave").disabled = smartSaving;
-  const ordered = ["fault", "verified", "observe", "unknown"];
+  const ordered = ["fault", "verified", "observe", "unknown", "absent"];
   const groups = Object.fromEntries(ordered.map((s) => [s, []]));
   data.rows.forEach((row) => groups[row.status].push(row));
   smartCounts = groups.verified.length + " / " + groups.fault.length;
@@ -95,13 +96,14 @@ function renderSmart(data) {
   summary.hidden = false;
   const counts = ["verified", "fault", "observe", "unknown"].map((s) =>
     smartLabels[s] + " " + groups[s].length);
+  if (groups.absent.length) counts.push(smartLabels.absent + " " + groups.absent.length);
   const summaryKey = counts.join("|");
   if (summary.dataset.key !== summaryKey) {
     summary.dataset.key = summaryKey;
     summary.replaceChildren(...counts.map((s) => el("span", s)));
   }
   const observed = groups.observe.filter((r) => r.log_id);
-  fillSmartList($("smartMain"), [...groups.fault, ...observed, ...groups.verified], data.run);
+  fillSmartList($("smartMain"), [...groups.fault, ...observed, ...groups.verified, ...groups.absent], data.run);
   const pending = [...groups.observe.filter((r) => !r.log_id), ...groups.unknown];
   $("smartPendingLabel").textContent = "待验证项目 · " + pending.length;
   $("smartPending").hidden = !pending.length;

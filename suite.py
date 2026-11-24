@@ -43,7 +43,10 @@ def make_plan(tests, mode):
             "quick", group in ("上电与复位", "按键、显示与语音", "外设观察")
         )
         if mode == "full" or included:
-            groups.setdefault(group, []).append({"name": name, "step": test["step"]})
+            item = {"name": name, "step": test["step"]}
+            if "part" in test:
+                item["part"] = test["part"]
+            groups.setdefault(group, []).append(item)
     ordered = list(dict.fromkeys([*GROUPS, *groups]))
     return dict(
         automatic=automatic,
@@ -150,6 +153,17 @@ class Suite:
                     )
                 self.persist()
             for i, group in enumerate(p["groups"]):
+                pending = []
+                for item in group["items"]:
+                    skipped = self.b.skip_if_absent(item)
+                    if skipped:
+                        c["outcomes"][item["name"]] = skipped
+                    else:
+                        pending.append(item)
+                self.persist()
+                if not pending:
+                    continue
+                group = dict(group, items=pending)
                 c.update(phase="等待观察", index=i, group=group)
                 self.b.log(
                     "INFO",

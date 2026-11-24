@@ -16,7 +16,7 @@
   align-items: flex-end;
 }
 .rp-toolbar label {
-  flex: 1 1 290px;
+  flex: 0 1 380px;
   min-width: 0;
 }
 .rp-toolbar select {
@@ -179,6 +179,7 @@
   align-items: start;
   gap: 10px;
 }
+.rp-issue-head { flex-wrap: wrap; }
 .rp-issue-head p {
   margin: 3px 0 8px;
 }

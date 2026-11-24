@@ -7,6 +7,9 @@
       "step": "将 TX 和预期应答改成设备固件实际支持的内容。测试引擎按 UTF-8 发送并附加 CRLF。",
       "tx": "VERSION?",
       "expect": "FW_VERSION=",
+      "match": "contains",
+      "success_sample": "FW_VERSION=1.2",
+      "failure_sample": "ERR unsupported",
       "timeout": 4
     },
     {

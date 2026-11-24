@@ -3,7 +3,7 @@ let selectedPart = "",
   partLogs = [],
   partStamp = "",
   partRequest = 0,
-  monitorRun = 0;
+  monitorRun = "";
 const componentNodes = new Map();
 function clearPart() {
   setLogFollow(true);
@@ -34,25 +34,41 @@ async function loadPart(part, force = false) {
 }
 function renderComponents() {
   if (!state.components) return;
-  if (monitorRun !== state.run) {
-    monitorRun = state.run;
+  const scope = state.run + "/" + state.connection_id;
+  if (monitorRun !== scope) {
+    monitorRun = scope;
     clearPart();
     componentNodes.clear();
     $("componentRows").replaceChildren();
   }
+  const identity = state.device_identity || {};
+  const identityBox = $("deviceIdentity");
+  const identityKey = JSON.stringify([scope, identity]);
+  if (identityBox.dataset.key !== identityKey) {
+    identityBox.dataset.key = identityKey;
+    identityBox.replaceChildren();
+    for (const [key, label] of [["board", "固件板型"], ["chip", "芯片"], ["firmware", "固件"], ["version", "固件版本"]]) {
+      const entry = identity[key];
+      if (!entry) continue;
+      const run = state.run;
+      const link = button(label + " · " + entry.value + " · L" + entry.log_id,
+        () => showEvidence({ run }, "L" + entry.log_id));
+      link.className = "text-link";
+      identityBox.append(link);
+    }
+    identityBox.hidden = !identityBox.childElementCount;
+  }
   $("autoUsb").checked = state.auto_usb;
   const records = state.components;
   const seen = records.filter((x) => x.log_id).length;
-  $("emptyParts").hidden = !$("onlyReported").checked || seen > 0;
+  $("emptyParts").hidden = records.length > 0 && (!$("onlyReported").checked || seen > 0);
   $("monitorInfo").textContent =
-    state.profile + " · " + seen + " / " + records.length + " 个元件有上报";
-  $("monitorHelp").textContent = state.connected
-    ? seen
-      ? "点击元件可单独查看它的带时间戳日志。"
-      : "正在监听。固件输出的日志会出现在右侧，支持逐元件上报的固件会在此显示读数。"
-    : state.auto_usb
-      ? state.usb_message + "。使用 USB 数据线连接板子的 UART 串口。"
-      : "USB 自动连接已关闭，可从上方选择串口。";
+    state.profile + " · " + seen + " 个元件有上报";
+  $("monitorHelp").hidden = !(state.connected && seen);
+  $("monitorHelp").textContent = "点元件名称可查看该元件的日志。";
+  $("emptyParts").textContent = state.connected
+    ? "正在监听，等待读取元件上报。"
+    : "连接设备后，这里会显示元件状态和最近读数。";
   for (const r of records) {
     let node = componentNodes.get(r.part);
     if (!node) {
@@ -83,6 +99,7 @@ function renderComponents() {
       node = { tr, pill, val, time, b };
       componentNodes.set(r.part, node);
     }
+    node.b.textContent = r.model ? r.name + " · " + r.model : r.name;
     node.tr.hidden = $("onlyReported").checked && !r.log_id;
     node.tr.classList.toggle("selected", r.part === selectedPart);
     node.b.setAttribute("aria-pressed", String(r.part === selectedPart));
