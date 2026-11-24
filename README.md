@@ -9,7 +9,7 @@
 ## 启动
 
 - 从 [Releases](../../releases) 下载桌面包。Mac（Apple Silicon）解压得到 `BoardBench.app`，可拖入“应用程序”后双击打开。Windows x64 解压后双击 `BoardBench.exe`。两者都使用系统窗口，关闭窗口即结束本次采集并释放串口。无需安装 Python。
-- Mac 使用系统 WebKit，Windows 使用 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。若 Windows 缺少运行时，请安装微软提供的运行时。发布包未做 Apple 开发者公证或 Windows 商业代码签名。
+- Mac 使用系统 WebKit，Windows 使用 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。若 Windows 缺少运行时，请安装微软提供的运行时。v0.5.0 的 Mac 包未经 Apple 公证，Windows EXE 未签名。首次使用请查看[下载校验与打开步骤](docs/distribution.md#安装-v050)。正式发行版的证书准备、签名及验签方法见[维护者发布流程](docs/distribution.md#维护者发布已签名版本)。
 - 从源码运行推荐 Python 3.12。macOS 双击 `macOS.command`，Windows 双击 `Windows.cmd`。脚本首次创建虚拟环境并安装依赖。也可运行 `python -m pip install -r requirements.txt` 和 `python app.py`。
 - `--browser` 在系统浏览器打开，`--no-browser` 仅启动本机服务。串口和日志均由本机进程处理。默认端口已占用时可关闭原实例，或使用 `--port 8766`。应用内支持导入配置、导出诊断报告及切换明暗外观。
 - 用 USB **数据线**连接，选择端口、波特率、串口格式。Windows 如无法枚举，请检查设备管理器和板载 USB 转串口芯片的驱动。关闭其他占用端口的串口监视器。
