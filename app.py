@@ -21,6 +21,7 @@ from aiohttp import web
 from ai_analysis import Analysis
 from bench import Bench
 from echo import Echo
+from suite import Suite, make_plan
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT = Path.home() / ".boardbench"
@@ -31,6 +32,7 @@ def make_app(directory):
     bench = Bench(directory / "history.sqlite3")
     echo = Echo(bench)
     ai = Analysis(bench)
+    suite = Suite(bench)
     token = secrets.token_urlsafe(24)
     lock = asyncio.Lock()
 
@@ -59,8 +61,17 @@ def make_app(directory):
 
     @routes.get("/api/setup")
     async def setup(req):
+        profiles = bench.profiles()
+        plans = {}
+        for name, tests in profiles.items():
+            plan = make_plan(tests, "full")
+            plans[name] = dict(
+                total=len(tests),
+                auto=len(plan["automatic"]),
+                groups=len(plan["groups"]),
+            )
         return web.json_response(
-            dict(token=token, profiles=list(bench.profiles()), ip=Echo.address())
+            dict(token=token, profiles=list(profiles), plans=plans, ip=Echo.address())
         )
 
     @routes.get("/api/ports")
@@ -90,6 +101,7 @@ def make_app(directory):
                 network_host=bench.network_host,
                 network_port=bench.network_port,
                 job=bench.taskname,
+                suite=suite.state(),
                 rx=bench.rx,
                 tx=bench.tx,
                 logs=logs,
@@ -137,6 +149,7 @@ def make_app(directory):
         fmt = req.match_info["fmt"]
         if fmt in ("json", "txt"):
             data["ai_analyses"] = ai.history(data["id"])
+            data["suites"] = suite.history(data["id"])
         if fmt == "json":
             body = json.dumps(data, ensure_ascii=False, indent=2)
             mime = "application/json"
@@ -173,6 +186,15 @@ def make_app(directory):
                 f"L{r['id']}  {r['at']} [{r['level']}] {r['source']} | {r['message']}"
                 for r in data["logs"]
             ]
+            for batch in data["suites"]:
+                rows.extend(
+                    [
+                        "",
+                        f"批量检测 #{batch['id']} · {batch['status']} · {batch['started']}",
+                    ]
+                )
+                for name, outcome in batch["outcomes"].items():
+                    rows.append(f"{outcome['state']}  {name}  {outcome['detail']}")
             for ai_row in data["ai_analyses"]:
                 rows.extend(["", f"AI 分析 · {ai_row['model']} · {ai_row['at']}"])
                 for result in ai_row["snapshot"]["results"]:
@@ -209,7 +231,7 @@ def make_app(directory):
             if op == "new":
                 if echo.runner:
                     raise ValueError("请先停止局域网回声。")
-                bench.new(d["profile"])
+                await bench.select_profile(d["profile"])
             elif op == "import":
                 bench.add_profile(d["data"])
             elif op == "connect":
@@ -240,6 +262,16 @@ def make_app(directory):
                         ]
                     ).encode()
                 bench.send(data)
+            elif op == "suite-start":
+                profile = d.get("profile", bench.profile)
+                if profile != bench.profile:
+                    if echo.runner:
+                        raise ValueError("切换板型前请先关闭当前回声测试。")
+                    await bench.select_profile(profile)
+                suite.start(d["mode"])
+                await asyncio.sleep(0)
+            elif op == "suite-confirm":
+                suite.confirm(d)
             elif op == "cases":
                 items = [
                     t
@@ -253,6 +285,8 @@ def make_app(directory):
             elif op == "stop":
                 await bench.stop()
             elif op == "mark":
+                if suite.state() and suite.state()["status"] == "运行中":
+                    raise ValueError("整板检测进行中，请在当前组记录结果。")
                 if not any(
                     t["name"] == d["name"] and t["kind"] == "manual"
                     for t in bench.tests

@@ -188,6 +188,12 @@ def validate(data):
         for k in ["name", "step"] + (["tx", "expect"] if r["kind"] == "serial" else []):
             if not isinstance(r.get(k), str) or not 1 <= len(r[k].strip()) <= 2048:
                 raise ValueError(f"项目缺少有效的 {k}。")
+        if "group" in r and (
+            not isinstance(r["group"], str) or not 1 <= len(r["group"].strip()) <= 60
+        ):
+            raise ValueError("group 应为 1–60 个字符的分组名。")
+        if "quick" in r and not isinstance(r["quick"], bool):
+            raise ValueError("quick 应为 true 或 false。")
         if r["name"] in names:
             raise ValueError("项目名称重复。")
         names.add(r["name"])

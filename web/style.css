@@ -982,3 +982,47 @@ dialog pre {
     font-size: 0;
   }
 }
+.suite-box {
+  padding: 15px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.suite-box .section-title {
+  margin-bottom: 4px;
+}
+.suite-box p {
+  margin: 5px 0 9px;
+}
+.suite-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+.suite-status span {
+  color: var(--sub);
+  font-size: 13px;
+}
+#suiteProgress progress {
+  width: 100%;
+  height: 7px;
+  accent-color: var(--active);
+}
+#suiteProgress h3 {
+  margin: 10px 0 5px;
+}
+.suite-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px;
+  align-items: start;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.suite-item p {
+  margin: 3px 0 0;
+}

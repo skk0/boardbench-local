@@ -72,6 +72,7 @@ function modal(title) {
 async function setup() {
   const d = await get("/api/setup");
   token = d.token;
+  suitePlans = d.plans;
   const selected = $("profile").value;
   $("profile").replaceChildren(...d.profiles.map((x) => new Option(x, x)));
   if (selected) $("profile").value = selected;
@@ -138,7 +139,7 @@ function buttons() {
   $("all").disabled =
     !connected || job || !state.tests.some((t) => t.kind === "serial");
   $("send").disabled = !connected || job;
-  $("new").disabled = connected || job || Boolean(state.echo);
+  $("new").disabled = job || Boolean(state.echo);
   $("ending").disabled = $("encoding").value === "HEX";
 }
 function mark(t) {
@@ -366,6 +367,7 @@ async function refresh() {
   }
   buttons();
   tests();
+  renderSuite();
   logs();
   plots();
 }
@@ -452,6 +454,7 @@ $("file").onchange = handle(async () => {
 $("profile").onchange = () => {
   $("template").href =
     "/api/template?name=" + encodeURIComponent($("profile").value);
+  if (state) renderSuite();
 };
 $("transport").onchange =
   $("port").onchange =

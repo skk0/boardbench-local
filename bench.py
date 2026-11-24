@@ -122,8 +122,23 @@ class Bench:
         )
         self.db.commit()
 
-    def new(self, profile):
-        if self.ser or self.job:
+    async def select_profile(self, profile):
+        if self.job or profile not in self.profiles():
+            raise ValueError("请先结束当前任务，并选择有效配置。")
+        previous = self.usb if self.ser else ""
+        if self.reader:
+            self.reader.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.reader
+            self.reader = None
+        self.new(profile, keep_connection=True)
+        if previous:
+            self.bind(previous)
+            self.log("INFO", self.transport, "沿用当前设备连接 · " + previous)
+            self.reader = asyncio.create_task(self.read_loop())
+
+    def new(self, profile, keep_connection=False):
+        if (self.ser and not keep_connection) or self.job:
             raise ValueError("请先停止任务并断开设备，再开始新的测试。")
         self.tests = self.profiles()[profile]
         self.profile = profile

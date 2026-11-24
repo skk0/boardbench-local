@@ -8,6 +8,7 @@
     <script defer src="/static/instrument.js"></script>
     <script defer src="/static/panel.js"></script>
     <script defer src="/static/analysis.js"></script>
+    <script defer src="/static/suite.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -136,14 +137,24 @@
         <div class="grid">
           <section class="panel">
             <section id="hardware" class="tab">
-              <div class="section-title">
-                <i aria-hidden="true" class="ico sliders-horizontal"></i>
-                <h2>测试配置</h2>
-              </div>
-              <label for="profile">设备与固件</label>
-              <div class="row">
-                <select id="profile"></select
-                ><button id="new" class="primary">新建测试</button>
+              <div class="suite-box">
+                <div class="section-title">
+                  <i class="ico checks" aria-hidden="true"></i>
+                  <h2>整板检测</h2>
+                </div>
+                <label for="profile">设备与固件</label>
+                <div class="row">
+                  <select id="profile"></select
+                  ><button id="new">新建测试</button>
+                </div>
+                <div id="suiteLaunch">
+                  <p id="suiteScope"></p>
+                  <div class="row">
+                    <button id="runBoard" class="primary">一键整板检测</button
+                    ><button id="runQuick">日常快测</button>
+                  </div>
+                </div>
+                <div id="suiteProgress" aria-live="polite"></div>
               </div>
               <div class="row">
                 <button id="import">导入配置</button
