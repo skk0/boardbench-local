@@ -109,7 +109,7 @@ function observed(id, z, gyro, at = time + id * 100) {
 }
 test("static capture uses five distinct subsequent observations and preserves evidence", () => {
   const first = observed(10, 1, [0, 0, 0]);
-  const session = panel.startMotionSampling(first);
+  const session = panel.startMotionSampling(first, 7, first.at);
   panel.advanceMotionSampling(session, first);
   for (let i = 1; i <= 5; i++) {
     const next = observed(10 + i, 1 + i * 0.001, [i, -i, 0.5]);
@@ -117,6 +117,9 @@ test("static capture uses five distinct subsequent observations and preserves ev
     panel.advanceMotionSampling(session, next);
   }
   assert.equal(session.status, "complete");
+  assert.equal(session.run, 7);
+  const note = panel.motionSampleNote(session);
+  for (const sample of session.samples) assert.ok(note.includes("L" + sample.logId + " · " + sample.values.join(" / ")));
   assert.equal(session.samples.map((s) => s.logId).join(","), "11,12,13,14,15");
   const stats = panel.motionStatistics(session.samples);
   near(stats.normMean, 1.003);
@@ -136,7 +139,8 @@ test("motion, changed gravity direction, stale timestamp or missing data interru
     { ...observed(12, 1, [0, 0, 0]), gravity: [0, 1, 0] },
     observed(12, 1, [0, 0, 0], time + 10000),
   ]) {
-    const session = panel.startMotionSampling(observed(10, 1, [0, 0, 0]));
+    const base = observed(10, 1, [0, 0, 0]);
+    const session = panel.startMotionSampling(base, 7, base.at);
     panel.advanceMotionSampling(session, observed(11, 1, [0, 0, 0]));
     panel.advanceMotionSampling(session, next);
     assert.notEqual(session.status, "running");
@@ -145,4 +149,13 @@ test("motion, changed gravity direction, stale timestamp or missing data interru
     panel.advanceMotionSampling(session, observed(13, 1, [0, 0, 0]));
     assert.equal(session.samples.length, 1);
   }
+});
+
+test("ignore a buffered reading received before clicking collect", () => {
+  const base = observed(10, 1, [0, 0, 0]);
+  const session = panel.startMotionSampling(base, 7, base.at + 150);
+  panel.advanceMotionSampling(session, observed(11, 1, [0, 0, 0]));
+  assert.equal(session.samples.length, 0);
+  panel.advanceMotionSampling(session, observed(12, 1, [0, 0, 0]));
+  assert.equal(session.samples.length, 1);
 });

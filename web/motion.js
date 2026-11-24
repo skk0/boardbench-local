@@ -86,11 +86,12 @@ function motionReading(state, now = Date.now()) {
 
 const motionSampleCount = 5;
 
-function startMotionSampling(reading, run) {
+function startMotionSampling(reading, run, startedAt = Date.now()) {
   return {
     run,
     status: "running",
     samples: [],
+    startedAt,
     lastId: reading.logId,
     lastAt: reading.at,
     reference: reading.gravity,
@@ -103,7 +104,7 @@ function advanceMotionSampling(session, reading) {
     session.status = reading.reason;
     return;
   }
-  if (reading.logId <= session.lastId) return;
+  if (reading.logId <= session.lastId || reading.at < session.startedAt) return;
   if (reading.at - session.lastAt > 8000 || reading.at < session.lastAt) {
     session.status = "采样时间不连续";
     return;

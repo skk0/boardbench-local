@@ -290,9 +290,9 @@ const replayPanel = (() => {
         ? 5 + (Math.log1p(counts[i]) / Math.log1p(max)) * 32
         : 1;
       ctx.fillStyle =
-        issues[bin] === 2
+        issues[i] === 2
           ? "#ff8e82"
-          : issues[bin] === 1
+          : issues[i] === 1
             ? "#ffcf79"
             : counts[i]
               ? "#86c8ff"
