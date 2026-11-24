@@ -1,0 +1,44 @@
+@font-face {
+  font-family: board-icons;
+  src: url("./assets/icons.woff2") format("woff2");
+  font-display: block;
+}
+.ico.activity::before {
+  content: "\e000";
+}
+.ico.arrows-down-up::before {
+  content: "\e098";
+}
+.ico.checks::before {
+  content: "\e53a";
+}
+.ico.circle-half::before {
+  content: "\e18c";
+}
+.ico.clock-counter-clockwise::before {
+  content: "\e1a0";
+}
+.ico.cpu::before {
+  content: "\e610";
+}
+.ico.microphone::before {
+  content: "\e326";
+}
+.ico.sliders-horizontal::before {
+  content: "\e434";
+}
+.ico.squares-four::before {
+  content: "\e464";
+}
+.ico.stack::before {
+  content: "\e466";
+}
+.ico.terminal::before {
+  content: "\e47e";
+}
+.ico.terminal-window::before {
+  content: "\eae8";
+}
+.ico.waveform::before {
+  content: "\e802";
+}
