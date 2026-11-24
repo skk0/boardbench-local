@@ -73,6 +73,16 @@ def run_window(port, make_service, smoke=False):
                             )
                             if not visible:
                                 raise RuntimeError("桌面窗口未显示智能检测")
+                            window.evaluate_js("document.querySelector('[data-tab=signal]').click()")
+                            if not window.evaluate_js("!!document.querySelector('#motionView .motion-dial')"):
+                                raise RuntimeError("桌面窗口未显示水平仪")
+                            window.evaluate_js("document.querySelector('[data-tab=replay]').click()")
+                            for _ in range(60):
+                                if window.evaluate_js("document.querySelector('#rpPlayer')?.hidden === false"):
+                                    break
+                                time.sleep(.1)
+                            else:
+                                raise RuntimeError("桌面窗口未加载历史会话")
                             checked.set_result(True)
                             break
                         time.sleep(0.15)

@@ -23,6 +23,8 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--esp-worker"]:
     sys.exit(0)
 
 from aiohttp import web
+import replay
+import vcd_export
 from ai_analysis import Analysis
 from bench import Bench
 from echo import Echo
@@ -101,6 +103,7 @@ def make_app(directory, monitor_usb=True):
                 tests=bench.tests,
                 results=results,
                 connected=bool(bench.ser),
+                connection_id=bench.connection_id,
                 transport=bench.transport,
                 port=bench.usb,
                 baud=bench.baud,
@@ -386,6 +389,8 @@ def make_app(directory, monitor_usb=True):
                 raise web.HTTPNotFound()
         return web.json_response({"ok": True})
 
+    app.add_routes(replay.routes(bench))
+    app.add_routes(vcd_export.routes(bench))
     app.add_routes(ai.routes())
     app.add_routes(routes)
     app.router.add_static("/static/", ROOT / "web")

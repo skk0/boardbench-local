@@ -6,12 +6,16 @@
     <title>BoardBench · 板卡测试台</title>
     <link rel="icon" href="/static/assets/boardbench.png" />
     <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/replay.css" />
+    <link rel="stylesheet" href="/static/motion.css" />
     <script defer src="/static/instrument.js"></script>
     <script defer src="/static/panel.js"></script>
     <script defer src="/static/analysis.js"></script>
     <script defer src="/static/suite.js"></script>
     <script defer src="/static/monitor.js"></script>
     <script defer src="/static/smart.js"></script>
+    <script defer src="/static/replay.js"></script>
+    <script defer src="/static/motion.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -34,6 +38,9 @@
         </button>
         <button data-tab="voice">
           <i aria-hidden="true" class="ico microphone"></i>小智回声
+        </button>
+        <button data-tab="replay">
+          <i aria-hidden="true" class="ico clock-counter-clockwise"></i>会话回放
         </button>
         <button data-tab="analysis">
           <i class="ico waveform" aria-hidden="true"></i>AI 分析
@@ -271,6 +278,7 @@
               ><button id="note">加入日志</button>
             </section>
             <section id="signal" class="tab" hidden>
+              <section id="motionView"></section>
               <h2>传感器实时曲线</h2>
               <p>
                 从最近 350 条日志的 RX 行提取数值。支持 JSON 对象、数值 CSV 和
@@ -307,6 +315,7 @@
                 日志分别记录签到、握手、录音状态与回送帧数。音质和屏幕文字由你现场确认。
               </p>
             </section>
+            <section id="replay" class="tab" hidden></section>
             <section id="analysis" class="tab" hidden>
               <div class="section-title">
                 <i class="ico waveform" aria-hidden="true"></i>

@@ -273,6 +273,8 @@ function logs(force = false) {
 function numeric(line) {
   try {
     const v = JSON.parse(line);
+    if (v?.bb === 1 && typeof v.part === "string")
+      return v.part === "imu" && v.status === "sample" ? motionChannels(v.value) : [];
     if (v && typeof v === "object")
       return Object.entries(v).filter(([, x]) => Number.isFinite(x));
   } catch {}
@@ -392,6 +394,7 @@ async function refresh() {
   tests();
   renderSuite();
   renderComponents();
+  renderMotion(state);
   updateSmart();
   logs();
   plots();
@@ -515,6 +518,10 @@ bind("history", async () => {
       box.append(a, el("p", "SHA-256 " + f.sha256));
     }
     box.append(
+      button("回放", () => {
+        $("dialog").close();
+        openReplay(r.id);
+      }),
       button("AI 分析", () => {
         $("dialog").close();
         openAnalysis(r.id);
@@ -525,7 +532,7 @@ bind("history", async () => {
 });
 for (const b of $("tabs").querySelectorAll("button"))
   b.onclick = () => {
-    document.body.classList.toggle("ai-view", b.dataset.tab === "analysis");
+    document.body.classList.toggle("ai-view", ["analysis", "replay"].includes(b.dataset.tab));
     if (b.dataset.tab !== "monitor" && selectedPart) {
       clearPart();
       logs(true);
@@ -545,6 +552,7 @@ for (const b of $("tabs").querySelectorAll("button"))
       renderCounts();
       plots();
       if (b.dataset.tab === "hardware") updateSmart();
+      if (b.dataset.tab === "signal") renderMotion(state);
     }
   };
 $("workdate").textContent = new Intl.DateTimeFormat("zh-CN", {
@@ -577,6 +585,7 @@ bind("theme", () => {
       await refresh();
     } catch {
       $("badge").textContent = "本地服务离线";
+      renderMotion(null);
       if (!$("hardware").hidden) smartUnavailable("本地服务离线，恢复后继续检测。");
     } finally {
       busy = false;

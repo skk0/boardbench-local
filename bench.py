@@ -101,6 +101,7 @@ class Bench:
         """)
         self.ser = self.reader = self.job = self.waiter = self.proc = None
         self.taskname = ""
+        self.connection_id = 0
         self.transport = "串口"
         self.usb = ""
         self.baud = 115200
@@ -302,6 +303,7 @@ class Bench:
         self.current_rx_log_id = None
         self.components.last.clear()
         self.ser = handle
+        self.connection_id += 1
         self.transport = "串口"
         self.bind(port)
         self.baud = baud
@@ -320,6 +322,7 @@ class Bench:
         self.current_rx_log_id = None
         self.components.last.clear()
         self.ser = await NetworkPort.connect(host, port, transport)
+        self.connection_id += 1
         self.transport = transport
         self.network_host = host
         self.network_port = port

@@ -1,0 +1,175 @@
+#motionView {
+  margin: 0 0 22px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--line);
+  --motion-ink: var(--sub);
+  --motion-point: #4d8eb9;
+}
+#motionView[data-signal="level"] {
+  --motion-point: #18ae85;
+}
+[data-theme="dark"] #motionView[data-signal="level"] {
+  --motion-point: #42d5a9;
+}
+.motion-top,
+.motion-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.motion-top {
+  justify-content: space-between;
+}
+.motion-top h2 {
+  margin: 0;
+}
+.motion-status {
+  color: var(--sub);
+  font-size: 12px;
+}
+[data-signal="level"] .motion-status {
+  color: #137753;
+  font-weight: 650;
+}
+[data-theme="dark"] [data-signal="level"] .motion-status {
+  color: #74dfb5;
+}
+.motion-instrument {
+  display: grid;
+  grid-template-columns: minmax(90px, 145px) minmax(0, 1fr);
+  gap: clamp(12px, 3vw, 28px);
+  align-items: center;
+  margin-block: 15px;
+}
+.motion-dial {
+  aspect-ratio: 1;
+  position: relative;
+  border-radius: 50%;
+  border: 1px solid #607684;
+  color: #aac1c9;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      #69838c 49.8%,
+      #69838c 50.2%,
+      transparent 50.4%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 49.6%,
+      #69838c 49.8%,
+      #69838c 50.2%,
+      transparent 50.4%
+    ),
+    radial-gradient(circle, transparent 39%, #536670 39.5%, transparent 40.5%),
+    radial-gradient(circle, #26414b, #1e313b 78%);
+  box-shadow: inset 0 0 0 4px #25343d;
+}
+.motion-target,
+.motion-bubble {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+.motion-target {
+  width: 16.8%;
+  border: 1px solid #9bb8bf;
+}
+.motion-bubble {
+  width: 10%;
+  background: var(--motion-point);
+  border: 1px solid #d4f6f5;
+  box-shadow: 0 0 0 3px #b2ffe91a;
+  transition:
+    left 0.16s,
+    top 0.16s;
+}
+.motion-x,
+.motion-y {
+  position: absolute;
+  font: 9px var(--mono);
+}
+.motion-x {
+  right: 7%;
+  top: 52%;
+}
+.motion-y {
+  left: 53%;
+  top: 7%;
+}
+.motion-values {
+  margin: 0;
+}
+.motion-values > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.motion-values dt {
+  color: var(--sub);
+  font-size: 12px;
+}
+.motion-values dd {
+  margin: 0;
+  color: var(--ink);
+  font: 600 clamp(20px, 2vw, 28px) var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.motion-source {
+  margin-top: 9px;
+  color: var(--sub);
+  font: 11px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.motion-actions button {
+  min-height: 32px;
+}
+.motion-help {
+  margin: 9px 0 0;
+  font-size: 12px;
+  color: var(--sub);
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-bubble {
+    transition: none;
+  }
+}
+.motion-goal {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1;
+  width: 13%;
+  border-radius: 50%;
+  border: 2px solid #ffca6a;
+  box-shadow: 0 0 0 2px #293039;
+}
+.motion-game {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.motion-game-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.motion-game-actions strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.motion-game-actions button {
+  min-height: 29px;
+  padding: 3px 10px;
+}
+.motion-game-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--sub);
+}
