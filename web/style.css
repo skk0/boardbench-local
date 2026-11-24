@@ -1115,3 +1115,68 @@ dialog pre {
     min-width: 32px;
   }
 }
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--active);
+  background: transparent;
+  border: 0;
+  padding: 3px 5px;
+  font-size: 12px;
+  font-weight: 550;
+  text-decoration: none;
+}
+.text-link:hover { text-decoration: underline; }
+#openSmart, #smartLive { margin-left: auto; }
+.smart-heading { margin-bottom: 4px; }
+#smartLive, #manualFlag, #smartSaved { font-size: 12px; color: var(--sub); }
+#smartLive.live { color: var(--active); }
+.smart-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  padding: 8px 0 10px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+}
+.smart-list { max-height: 45vh; overflow: auto; }
+.smart-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  border-top: 1px solid var(--line);
+  padding: 9px 1px;
+}
+.smart-row p { margin: 0; overflow-wrap: anywhere; }
+.smart-row .text-link { justify-self: end; }
+.smart-pill {
+  justify-self: end;
+  color: var(--sub);
+  background: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+.smart-pill[data-status="verified"] { color: #16643b; background: #e3f3e8; }
+.smart-pill[data-status="fault"] { color: #962d22; background: #ffebe8; }
+[data-theme="dark"] .smart-pill[data-status="verified"] { color: #9de6b8; background: #223b30; }
+[data-theme="dark"] .smart-pill[data-status="fault"] { color: #ffb3a8; background: #482d2a; }
+.smart-disclosure summary, .manual-suite > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+.smart-disclosure { border-block: 1px solid var(--line); }
+.smart-actions { align-items: center; margin: 14px 0 4px; }
+.manual-suite { border-top: 1px solid var(--line); margin-top: 18px; }
+#manualFlag { margin-left: 10px; font-weight: 400; }
+.smart-profile { margin: 9px 0 4px; }
+.smart-profile summary { cursor: pointer; color: var(--sub); font-size: 13px; }
+.smart-profile strong { color: var(--ink); }
+.smart-profile[open] > label { margin-top: 12px; }
+.smart-profile .row { margin-bottom: 12px; }

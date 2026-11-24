@@ -348,9 +348,7 @@ async function refresh() {
     ? "● " + state.transport + " 已打开"
     : "○ 本地服务在线";
   $("run").textContent = "#" + state.run;
-  $("counts").textContent = ["通过", "失败"]
-    .map((s) => state.results.filter((r) => r.state === s).length)
-    .join(" / ");
+  renderCounts();
   $("bytes").textContent =
     state.rx.toLocaleString() + " / " + state.tx.toLocaleString();
   $("job").textContent = state.job || "空闲";
@@ -394,6 +392,7 @@ async function refresh() {
   tests();
   renderSuite();
   renderComponents();
+  updateSmart();
   logs();
   plots();
 }
@@ -542,7 +541,11 @@ for (const b of $("tabs").querySelectorAll("button"))
     $("tabs")
       .querySelectorAll("button")
       .forEach((n) => n.classList.toggle("active", n === b));
-    if (state) plots();
+    if (state) {
+      renderCounts();
+      plots();
+      if (b.dataset.tab === "hardware") updateSmart();
+    }
   };
 $("workdate").textContent = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -574,6 +577,7 @@ bind("theme", () => {
       await refresh();
     } catch {
       $("badge").textContent = "本地服务离线";
+      if (!$("hardware").hidden) smartUnavailable("本地服务离线，恢复后继续检测。");
     } finally {
       busy = false;
     }

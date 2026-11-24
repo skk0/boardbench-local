@@ -257,6 +257,21 @@ class Analysis:
             for i, x in enumerate(rows)
         ]
         done = {r["name"] for r in rows}
+        if run == self.b.run and self.b.ser:
+            smart_rows = self.b.smart_state()["rows"]
+            snapshot_time = stamp()
+        else:
+            saved = db.execute(
+                "SELECT at,rows FROM smart_reports WHERE run=? ORDER BY id DESC LIMIT 1", (run,)
+            ).fetchone()
+            smart_rows = json.loads(saved["rows"]) if saved else []
+            snapshot_time = saved["at"] if saved else ""
+        smart_states = {"verified": "已验证", "fault": "异常", "observe": "需现场观察", "unknown": "证据不足"}
+        for part in smart_rows:
+            results.append(dict(
+                ref=f"R{len(results) + 1}", name="智能检测 · " + scrub(part["name"]),
+                state=smart_states[part["status"]], detail=scrub(part["detail"])[:360], at=snapshot_time,
+            ))
         snap = dict(
             session=run,
             profile=scrub(info["profile"]),

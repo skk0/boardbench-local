@@ -240,6 +240,55 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(needle, await r.text())
         self.assertEqual((await self.client.get("/api/report/999/txt")).status, 400)
 
+    async def test_passive_smart_reports_while_manual_suite_is_optional(self):
+        initial = await (await self.client.get("/api/smart")).json()
+        self.assertFalse(initial["connected"])
+        self.assertEqual((await self.post("smart-report")).status, 400)
+        incoming = asyncio.get_running_loop().create_future()
+        sent = bytearray()
+
+        async def peer(reader, writer):
+            writer.write(b'{"bb":1,"part":"eeprom","status":"ack","value":"0x50 ACK"}\n')
+            await writer.drain()
+            try:
+                sent.extend(await reader.read())
+            finally:
+                writer.close()
+                await writer.wait_closed()
+                incoming.set_result(True)
+
+        server = await asyncio.start_server(peer, "127.0.0.1", 0)
+        async with server:
+            port = server.sockets[0].getsockname()[1]
+            self.assertEqual((await self.post("network", host="127.0.0.1", transport="TCP", port=port)).status, 200)
+            for _ in range(40):
+                live = await (await self.client.get("/api/smart")).json()
+                if any(r["id"] == "eeprom" for r in live["rows"]):
+                    break
+                await asyncio.sleep(.025)
+            row = next(r for r in live["rows"] if r["id"] == "eeprom")
+            self.assertEqual(row["status"], "verified")
+            ref = await (await self.client.get(f"/api/ai/evidence/{self.run}/{row['log_id']}")).json()
+            self.assertIn("0x50 ACK", ref["message"])
+            self.assertEqual((await self.post("smart-report", run=-1)).status, 400)
+            self.assertEqual((await self.post("smart-report")).status, 200)
+            active_report = await (await self.client.get(f"/api/report/{self.run}/json")).json()
+            self.assertEqual(active_report["smart_live"]["rows"], live["rows"])
+            self.assertEqual(active_report["results"], [])
+            self.assertEqual((await self.post("disconnect")).status, 200)
+            await asyncio.wait_for(incoming, 3)
+        self.assertEqual(sent, b"")
+        final = await (await self.client.get(f"/api/report/{self.run}/json")).json()
+        self.assertEqual(len(final["smart_reports"]), 2)
+        self.assertNotIn("smart_live", final)
+        self.assertEqual(final["smart_reports"][-1]["rows"], live["rows"])
+        preview = await (await self.post("ai/preview", focus="recent", question="")).json()
+        smart_results = preview["snapshot"]["results"]
+        self.assertTrue(any(r["name"] == "智能检测 · " + row["name"] and r["state"] == "已验证" for r in smart_results))
+        report = await (await self.client.get(f"/api/report/{self.run}/txt")).text()
+        self.assertIn(f"L{row['log_id']}", report)
+        self.assertIn("智能检测", report)
+
     async def test_local_audio_roundtrip(self):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))

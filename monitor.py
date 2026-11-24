@@ -5,6 +5,8 @@ import json
 import re
 import time
 
+from smart import key_cycles
+
 PARTS = {
     "mcu": "主控",
     "flash": "Flash",
@@ -40,6 +42,9 @@ STATES = {
 }
 TAG = re.compile(r"^(?P<level>[EWIDV])\s*\(\d+\)\s+(?P<tag>[A-Za-z0-9_.-]+):")
 TAGS = {
+    "boot": "mcu",
+    "cpu_start": "mcu",
+    "app_init": "mcu",
     "wifi": "wifi",
     "wifistation": "wifi",
     "wifi_station": "wifi",
@@ -83,7 +88,10 @@ def decode(line):
         return part, STATES[data["status"]], str(data.get("value", ""))[:400], True
     match = TAG.match(plain)
     if match:
-        part = TAGS.get(match["tag"].lower())
+        tag = match["tag"].lower()
+        part = TAGS.get(tag)
+        if tag == "esp_netif_handlers" and plain[match.end():].lstrip().lower().startswith("sta ip:"):
+            part = "wifi"
         if part:
             return (
                 part,
@@ -109,14 +117,22 @@ class Components:
         part, state, value, periodic = parsed
         if part not in self.last and len(self.last) >= 128:
             return
+        now = time.monotonic()
+        cycles = {}
+        if part == "buttons":
+            previous = self.last.get(part, {})
+            if now - previous.get("tick", now) > 8:
+                previous = {}
+            cycles = key_cycles(previous, state, value, log_id)
         self.last[part] = dict(
             part=part,
             status=state,
             value=value,
             at=at,
             log_id=log_id,
-            tick=time.monotonic(),
+            tick=now,
             periodic=periodic,
+            **cycles,
         )
         db.execute("INSERT INTO component_events VALUES(?,?,?)", (run, part, log_id))
 

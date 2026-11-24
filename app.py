@@ -122,6 +122,10 @@ def make_app(directory, monitor_usb=True):
             )
         )
 
+    @routes.get("/api/smart")
+    async def smart(req):
+        return web.json_response(bench.smart_state())
+
     @routes.get("/api/components/{run}/{part}")
     async def component_log(req):
         run = int(req.match_info["run"])
@@ -173,6 +177,9 @@ def make_app(directory, monitor_usb=True):
         if fmt in ("json", "txt"):
             data["ai_analyses"] = ai.history(data["id"])
             data["suites"] = suite.history(data["id"])
+            data["smart_reports"] = bench.smart_history(data["id"])
+            if data["id"] == bench.run and bench.ser:
+                data["smart_live"] = bench.smart_state()
         if fmt == "json":
             body = json.dumps(data, ensure_ascii=False)[:-1] + ', "logs": ['
             mime = "application/json"
@@ -193,6 +200,15 @@ def make_app(directory, monitor_usb=True):
             for name in names:
                 r = byname.get(name, dict(state="未测", detail=""))
                 rows.append(f"{r['state']}  {name}  {r['detail']}")
+            smart_reports = list(data["smart_reports"])
+            if "smart_live" in data:
+                smart_reports.append(dict(reason="导出时的实时观测", at="", **data["smart_live"]))
+            labels = {"verified": "已验证", "fault": "异常", "unknown": "证据不足", "observe": "待观察"}
+            for snapshot in smart_reports:
+                rows.extend(["", f"智能检测 · {snapshot['reason']}  {snapshot['at']}"])
+                for item in snapshot["rows"]:
+                    ref = f"  L{item['log_id']}" if item['log_id'] else ""
+                    rows.append(f"{labels[item['status']]}  {item['name']}  {item['detail']}{ref}")
             for batch in data["suites"]:
                 rows.extend(
                     [
@@ -317,6 +333,8 @@ def make_app(directory, monitor_usb=True):
                         ]
                     ).encode()
                 bench.send(data)
+            elif op == "smart-report":
+                return web.json_response(dict(ok=True, **bench.save_smart("保存当前结果")))
             elif op == "suite-start":
                 profile = d.get("profile", bench.profile)
                 if profile != bench.profile:

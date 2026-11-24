@@ -65,6 +65,14 @@ def run_window(port, make_service, smoke=False):
                         raise RuntimeError("桌面窗口未载入")
                     for _ in range(100):
                         if window.evaluate_js("document.querySelectorAll('#componentRows tr').length > 0"):
+                            window.evaluate_js("document.querySelector('[data-tab=hardware]').click()")
+                            visible = window.evaluate_js(
+                                "!document.querySelector('#hardware').hidden && "
+                                "!document.querySelector('#manualSuite').open && "
+                                "document.querySelector('#smartHelp').textContent.length > 0"
+                            )
+                            if not visible:
+                                raise RuntimeError("桌面窗口未显示智能检测")
                             checked.set_result(True)
                             break
                         time.sleep(0.15)

@@ -10,6 +10,7 @@ bind("runQuick", () => suiteAction("quick"));
 function renderSuite() {
   const c = state.suite;
   const running = c?.status === "运行中";
+  $("manualFlag").textContent = running ? "进行中 · " + c.phase : "可选";
   $("suiteLaunch").hidden = running;
   $("profile").disabled = running;
   const plan = suitePlans[$("profile").value];
@@ -71,7 +72,7 @@ function renderSuite() {
           (c.index + 1) +
           " / " +
           c.group_count +
-          " 组。按下面步骤观察，只需单独标记失败或跳过的项目。",
+          " 组。记录已观察的项目，未记录项将跳过。",
       ),
     );
     const controls = new Map();
@@ -83,7 +84,7 @@ function renderSuite() {
       const pick = el("select");
       pick.setAttribute("aria-label", t.name + "的观察结果");
       pick.replaceChildren(
-        ...["待确认", "失败", "跳过"].map((k) => new Option(k, k)),
+        ...["未记录", "通过", "失败", "跳过"].map((k) => new Option(k, k)),
       );
       row.append(info, pick);
       area.append(row);
@@ -101,8 +102,8 @@ function renderSuite() {
       for (const [name, pick] of controls) {
         const state = skip
           ? "跳过"
-          : pick.value === "待确认"
-            ? "通过"
+          : pick.value === "未记录"
+            ? "跳过"
             : pick.value;
         if (state === "失败" && !text) {
           note.focus();
@@ -121,7 +122,7 @@ function renderSuite() {
     };
     const actions = el("div");
     actions.className = "row";
-    const confirm = button("确认其余通过并继续", () => send(false));
+    const confirm = button("保存记录并继续", () => send(false));
     confirm.classList.add("primary");
     actions.append(
       confirm,

@@ -11,6 +11,7 @@
     <script defer src="/static/analysis.js"></script>
     <script defer src="/static/suite.js"></script>
     <script defer src="/static/monitor.js"></script>
+    <script defer src="/static/smart.js"></script>
   </head>
   <body>
     <aside class="rail">
@@ -128,7 +129,7 @@
           </div>
           <div>
             <i aria-hidden="true" class="ico checks"></i
-            ><small>已通过 / 已失败</small><strong id="counts">0 / 0</strong>
+            ><small id="countsLabel">验收通过 / 失败</small><strong id="counts">0 / 0</strong>
           </div>
           <div>
             <i aria-hidden="true" class="ico arrows-down-up"></i
@@ -145,6 +146,7 @@
               <div class="section-title">
                 <i class="ico activity" aria-hidden="true"></i>
                 <h2>元件实时监视</h2>
+                <button id="openSmart" class="text-link">查看智能检测 →</button>
               </div>
               <div class="row monitor-bar">
                 <label class="checkline"
@@ -173,44 +175,69 @@
               </div>
             </section>
             <section id="hardware" class="tab" hidden>
-              <div class="suite-box">
-                <div class="section-title">
-                  <i class="ico checks" aria-hidden="true"></i>
-                  <h2>整板检测</h2>
-                </div>
+              <div class="section-title smart-heading">
+                <i class="ico cpu" aria-hidden="true"></i>
+                <h2>智能检测</h2>
+                <span id="smartLive">等待连接</span>
+              </div>
+              <details class="smart-profile">
+                <summary><span>检测板型</span> <strong id="smartProfileName"></strong></summary>
                 <label for="profile">设备与固件</label>
                 <div class="row">
-                  <select id="profile"></select
-                  ><button id="new">新建测试</button>
+                  <select id="profile"></select>
+                  <button id="new">用此板型新建测试</button>
                 </div>
-                <div id="suiteLaunch">
-                  <p id="suiteScope"></p>
-                  <div class="row">
-                    <button id="runBoard" class="primary">一键整板检测</button
-                    ><button id="runQuick">日常快测</button>
+              </details>
+              <p id="smartHelp" role="status">连接板子后会自动读取日志并显示结论。</p>
+              <button id="stopManualForSmart" hidden>结束人工验收</button>
+              <div id="smartSummary" class="smart-summary" hidden></div>
+              <div id="smartMain" class="smart-list"></div>
+              <details id="smartPending" class="smart-disclosure" hidden>
+                <summary id="smartPendingLabel">待验证项目</summary>
+                <div id="smartPendingRows" class="smart-list"></div>
+              </details>
+              <div class="row smart-actions">
+                <button id="smartSave" disabled>保存检测快照</button>
+                <span id="smartSaved" role="status"></span>
+                <a id="smartTxt" class="text-link" hidden download>导出 TXT</a>
+                <a id="smartJson" class="text-link" hidden download>导出 JSON</a>
+              </div>
+              <details id="manualSuite" class="manual-suite">
+                <summary>人工验收与高级工具<span id="manualFlag"></span></summary>
+                <div class="suite-box">
+                  <div class="section-title">
+                    <i class="ico checks" aria-hidden="true"></i>
+                    <h2>分组验收</h2>
                   </div>
+                  <div id="suiteLaunch">
+                    <p id="suiteScope"></p>
+                    <div class="row">
+                      <button id="runBoard">开始完整验收</button
+                      ><button id="runQuick">简短验收</button>
+                    </div>
+                  </div>
+                  <div id="suiteProgress" aria-live="polite"></div>
                 </div>
-                <div id="suiteProgress" aria-live="polite"></div>
-              </div>
-              <div class="row">
-                <button id="import">导入配置</button
-                ><a id="template" class="button">下载配置</a
-                ><input
-                  type="file"
-                  hidden
-                  id="file"
-                  accept="application/json,.json"
-                />
-              </div>
-              <div class="divider"></div>
-              <h2 id="suite">检测项目</h2>
-              <div class="row">
-                <button id="probe">读取 ESP 芯片与 Flash</button
-                ><button id="backup">备份 Flash</button
-                ><button id="all">运行命令项</button
-                ><button id="stop">停止任务</button>
-              </div>
-              <div id="tests"></div>
+                <div class="row">
+                  <button id="import">导入配置</button
+                  ><a id="template" class="button">下载配置</a
+                  ><input
+                    type="file"
+                    hidden
+                    id="file"
+                    accept="application/json,.json"
+                  />
+                </div>
+                <div class="divider"></div>
+                <h2 id="suite">检测项目</h2>
+                <div class="row">
+                  <button id="probe">读取 ESP 芯片与 Flash</button
+                  ><button id="backup">备份 Flash</button
+                  ><button id="all">运行命令项</button
+                  ><button id="stop">停止任务</button>
+                </div>
+                <div id="tests"></div>
+              </details>
             </section>
             <section id="terminal" class="tab" hidden>
               <h2>发送数据</h2>

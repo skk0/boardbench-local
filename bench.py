@@ -18,6 +18,7 @@ import select
 import socket
 import serial
 from serial.tools import list_ports
+from smart import evaluate
 from monitor import Components
 from profiles import BUILTINS, validate
 
@@ -89,6 +90,8 @@ class Bench:
         self.db.executescript("""
         PRAGMA journal_mode=WAL;
         PRAGMA synchronous=NORMAL;
+        CREATE TABLE IF NOT EXISTS smart_reports(id INTEGER PRIMARY KEY,run INTEGER,at TEXT,reason TEXT,rows TEXT);
+        CREATE INDEX IF NOT EXISTS smart_reports_run ON smart_reports(run,id);
         CREATE TABLE IF NOT EXISTS profiles(name TEXT PRIMARY KEY, tests TEXT);
         CREATE TABLE IF NOT EXISTS runs(id INTEGER PRIMARY KEY, started TEXT, profile TEXT, tests TEXT, port TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS backups(id TEXT PRIMARY KEY, run INTEGER, size INTEGER, sha256 TEXT);
@@ -152,6 +155,9 @@ class Bench:
     def new(self, profile, keep_connection=False):
         if (self.ser and not keep_connection) or self.job:
             raise ValueError("请先停止任务并断开设备，再开始新的测试。")
+        if keep_connection and self.ser and self.current_rx_log_id:
+            self.save_smart("切换检测配置")
+        self.current_rx_log_id = None
         self.components.last.clear()
         self.tests = self.profiles()[profile]
         self.profile = profile
@@ -170,6 +176,7 @@ class Bench:
             (self.run, at, level, source, str(message), raw),
         )
         if level == "RX":
+            self.current_rx_log_id = row.lastrowid
             self.components.observe(self.db, self.run, row.lastrowid, at, message)
         self.db.commit()
 
@@ -186,6 +193,30 @@ class Bench:
 
     def rows(self, sql, params=()):
         return [dict(r) for r in self.db.execute(sql, params)]
+
+    def smart_state(self):
+        return dict(run=self.run, connected=bool(self.ser), rows=evaluate(self))
+
+    def save_smart(self, reason):
+        if not self.ser:
+            raise ValueError("请先连接设备，再保存智能检测结果。")
+        self.check_space()
+        at = stamp()
+        rows = evaluate(self)
+        cursor = self.db.execute(
+            "INSERT INTO smart_reports(run,at,reason,rows) VALUES(?,?,?,?)",
+            (self.run, at, reason, json.dumps(rows, ensure_ascii=False)),
+        )
+        self.db.commit()
+        return dict(id=cursor.lastrowid, at=at, run=self.run)
+
+    def smart_history(self, run):
+        reports = self.rows(
+            "SELECT id,at,reason,rows FROM smart_reports WHERE run=? ORDER BY id", (run,)
+        )
+        for report in reports:
+            report["rows"] = json.loads(report["rows"])
+        return reports
 
     def report(self, run, include_logs=True):
         rows = self.rows("SELECT * FROM runs WHERE id=?", (run,))
@@ -268,6 +299,7 @@ class Bench:
         handle.dtr = handle.rts = False
         handle.port = port
         handle.open()
+        self.current_rx_log_id = None
         self.components.last.clear()
         self.ser = handle
         self.transport = "串口"
@@ -285,6 +317,7 @@ class Bench:
         address = f"{transport.lower()}://{host}:{port}"
         if self.ser or self.job or (self.usb and self.usb != address):
             raise ValueError("请结束当前连接，换设备时先新建测试。")
+        self.current_rx_log_id = None
         self.components.last.clear()
         self.ser = await NetworkPort.connect(host, port, transport)
         self.transport = transport
@@ -372,8 +405,14 @@ class Bench:
 
     def close_port(self):
         if self.ser:
-            self.ser.close()
-            self.ser = None
+            try:
+                if self.current_rx_log_id and not self.storage_hold:
+                    self.save_smart("连接结束前的最后观测")
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                self.storage_hold = "智能检测快照未保存 · " + str(exc)
+            finally:
+                self.ser.close()
+                self.ser = None
             self.log("INFO", self.transport, "连接已关闭")
         if self.waiter and not self.waiter[0].done():
             self.waiter[0].set_exception(ValueError("串口已断开"))
