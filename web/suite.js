@@ -16,15 +16,9 @@ function renderSuite() {
   const plan = suitePlans[$("profile").value];
   if (plan) {
     const offline =
-      plan.auto && !state.connected ? " 当前未连接设备，命令项将跳过。" : "";
+      plan.auto && !state.connected ? " 现在没连板子，软件自动查的项目会跳过。" : "";
     $("suiteScope").textContent =
-      plan.total +
-      " 项 · " +
-      plan.auto +
-      " 项自动 · " +
-      plan.groups +
-      " 组现场观察。" +
-      offline;
+      "共 " + plan.total + " 项：" + plan.auto + " 项软件自动查，" + plan.groups + " 组需要你看或听。" + offline;
   }
   $("runBoard").disabled = $("runQuick").disabled = Boolean(state.job);
   const done = c ? Object.keys(c.outcomes).length : 0;
@@ -37,14 +31,14 @@ function renderSuite() {
   const status = el("div");
   status.className = "suite-status";
   status.append(
-    el("strong", c.mode === "quick" ? "日常快测" : "完整验收"),
+    el("strong", c.mode === "quick" ? "只查常用的" : "全部检查"),
     el("span", c.phase + " · " + done + " / " + c.total + " 项"),
   );
   area.append(status);
   const meter = el("progress");
   meter.max = c.total;
   meter.value = done;
-  meter.setAttribute("aria-label", "整板检测进度");
+  meter.setAttribute("aria-label", "检查进度");
   area.append(meter);
   if (!running) {
     const totals = { 通过: 0, 失败: 0, 跳过: 0 };
@@ -55,11 +49,11 @@ function renderSuite() {
         Object.entries(totals)
           .map(([k, v]) => k + " " + v)
           .join("　") +
-          "　未测 " +
+          "　没测 " +
           (c.total - done),
       ),
     );
-    area.append(button("分析本次结果", () => openAnalysis(c.run)));
+    area.append(button("让 AI 看看这次结果", () => openAnalysis(c.run)));
     return;
   }
   if (c.group) {
@@ -72,7 +66,7 @@ function renderSuite() {
           (c.index + 1) +
           " / " +
           c.group_count +
-          " 组。记录已观察的项目，未记录项将跳过。",
+          " 组。看完选结果，没选的算跳过。",
       ),
     );
     const controls = new Map();
@@ -82,15 +76,15 @@ function renderSuite() {
       const info = el("div");
       info.append(el("strong", t.name), el("p", t.step));
       const pick = el("select");
-      pick.setAttribute("aria-label", t.name + "的观察结果");
+      pick.setAttribute("aria-label", t.name + "的结果");
       pick.replaceChildren(
-        ...["未记录", "通过", "失败", "跳过"].map((k) => new Option(k, k)),
+        ...["未记录", "通过", "失败", "跳过"].map((k) => new Option(k === "未记录" ? "还没看" : k, k)),
       );
       row.append(info, pick);
       area.append(row);
       controls.set(t.name, pick);
     }
-    const label = el("label", "本组观察记录（有异常时填写）");
+    const label = el("label", "看到的情况（有问题时一定要写）");
     const note = el("textarea");
     note.rows = 2;
     note.maxLength = 1400;
@@ -107,7 +101,7 @@ function renderSuite() {
             : pick.value;
         if (state === "失败" && !text) {
           note.focus();
-          throw Error("请记录故障现象，便于定位和后续 AI 分析。");
+          throw Error("选了“失败”请写一下看到的现象，方便找原因。");
         }
         marks[name] = {
           state,
@@ -122,7 +116,7 @@ function renderSuite() {
     };
     const actions = el("div");
     actions.className = "row";
-    const confirm = button("保存记录并继续", () => send(false));
+    const confirm = button("保存，下一组", () => send(false));
     confirm.classList.add("primary");
     actions.append(
       confirm,
@@ -133,10 +127,10 @@ function renderSuite() {
     area.append(
       el(
         "p",
-        "自动检测 " +
+        "软件正在自动查 " +
           c.automatic_count +
-          " 项。每次收发、超时和设备错误均记录在日志中。",
+          " 项，每一步都会记在右边的记录里。",
       ),
     );
-  area.append(button("停止本轮检测", () => act("stop")));
+  area.append(button("不查了", () => act("stop")));
 }

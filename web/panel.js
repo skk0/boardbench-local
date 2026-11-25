@@ -97,12 +97,12 @@ async function ports() {
   $("port").replaceChildren(
     ...rows.map((x) => new Option(x.path + " · " + (x.saved?.name || x.label), x.path)),
   );
-  if (!rows.length) $("port").add(new Option("等待 USB 串口", ""));
+  if (!rows.length) $("port").add(new Option("没找到 USB 端口", ""));
   if (rows.some((x) => x.path === old)) $("port").value = old;
   portSettings(rows);
   $("portNote").dataset.usb = rows.length
-    ? "发现 " + rows.length + " 个串口 · 请选择当前设备"
-    : "未发现 USB 串口。插入数据线后点击扫描。";
+    ? "找到 " + rows.length + " 个 USB 端口，选你的板子后点“连接”。"
+    : "没找到 USB 端口。插上数据线后点“重新找端口”。";
   if (state) buttons();
 }
 function buttons() {
@@ -116,21 +116,21 @@ function buttons() {
   const validNumber = input.value !== "" && input.validity.valid &&
     Number.isInteger(input.valueAsNumber);
   const ready = validNumber && (net ? Boolean($("host").value.trim()) : port);
-  $("linkTitle").textContent = connected ? state.port : "连接测试设备";
+  $("linkTitle").textContent = connected ? state.port : "连接板子";
   $("linkState").textContent = connected
     ? mode === "UDP"
-      ? "UDP 对端已设置"
-      : "设备已连接"
-    : "设备未连接";
+      ? "已设置好板子的地址"
+      : "已连上板子"
+    : "还没连上板子";
   $("portNote").textContent = connected
     ? mode === "串口"
-      ? "串口监视已开启 · " + state.baud + " baud"
-      : "数据收发将记录在事件日志中。"
+      ? "正在接收板子的输出（只听不发）· 速度 " + state.baud
+      : "收到和发出的内容都会记在右边的记录里。"
     : net
-      ? !$("host").value.trim() ? "请输入设备 IP 或主机名。"
-        : !validNumber ? "请输入 1–65535 之间的整数端口。" : "地址已填写，可以连接设备。"
-      : port && !validNumber ? "请输入 300–4000000 之间的整数波特率。"
-      : $("portNote").dataset.usb || "正在扫描本机串口…";
+      ? !$("host").value.trim() ? "请填板子的 IP 地址或名字。"
+        : !validNumber ? "端口号要填 1–65535 之间的整数。" : "填好了，可以点“连接”。"
+      : port && !validNumber ? "速度要填 300–4000000 之间的整数，不确定就填 115200。"
+      : $("portNote").dataset.usb || "正在找电脑上的 USB 端口…";
   document
     .querySelector(".instrument")
     .classList.toggle("connected", connected);
@@ -145,11 +145,7 @@ function buttons() {
     $("netPort").disabled =
     $("transport").disabled =
       connected || job || Boolean(connectionPending);
-  $("connect").textContent = connectionPending || (connected
-    ? "断开连接"
-    : net
-      ? "连接设备"
-      : "连接串口");
+  $("connect").textContent = connectionPending || (connected ? "断开" : "连接");
   $("connect").disabled = Boolean(connectionPending) || (!connected && (!ready || job));
   $("port").disabled =
     $("baud").disabled =
@@ -211,16 +207,16 @@ function tests() {
       el("span", t.name),
       el(
         "small",
-        (t.kind === "serial" ? "命令" : "人工") +
+        (t.kind === "serial" ? "自动" : "人工") +
           " · " +
-          (results.get(t.name)?.state || "未测"),
+          (results.get(t.name)?.state || "还没测"),
       ),
     );
     row.append(summary, el("p", t.step));
     if (t.kind === "serial")
-      row.append(el("p", "TX  " + t.tx + "  →  RX 包含 " + t.expect));
+      row.append(el("p", "发送 " + t.tx + "  →  等板子回答里出现 " + t.expect));
     if (results.has(t.name)) row.append(el("p", results.get(t.name).detail));
-    const b = button(t.kind === "serial" ? "执行检测" : "记录观察", () =>
+    const b = button(t.kind === "serial" ? "发命令检查" : "记下看到的情况", () =>
       t.kind === "serial" ? act("cases", { name: t.name }) : mark(t),
     );
     b.disabled = t.kind === "serial" && (!state.connected || !!state.job);
@@ -241,7 +237,7 @@ function currentLogs() {
 }
 function setLogFollow(follow) {
   frozenLogs = follow ? null : currentLogs().slice();
-  $("pause").textContent = follow ? "暂停跟随" : "回到最新";
+  $("pause").textContent = follow ? "停在这里" : "回到最新";
   $("pause").setAttribute("aria-pressed", String(!follow));
   updateLogCount();
 }
@@ -249,7 +245,7 @@ function updateLogCount() {
   const count = $("stream").childElementCount && $("stream").firstElementChild.matches(".line")
     ? $("stream").childElementCount : 0;
   $("logCount").textContent = "显示 " + count + " 条 · " +
-    (frozenLogs ? "已暂停跟随，仍在记录" : "跟随最新");
+    (frozenLogs ? "画面停住了，后台还在记录" : "自动滚到最新");
 }
 function logs(force = false) {
   if (!state || (frozenLogs && !force)) return;
@@ -305,8 +301,8 @@ function logs(force = false) {
   );
   $("clearLogFilters").hidden = !query && !level;
   if (!lines.length) {
-    const message = query || level ? "当前筛选没有匹配的日志。"
-      : selectedPart ? "这个元件还没有上报日志。" : "等待本次会话的第一条日志。";
+    const message = query || level ? "没有符合条件的记录。"
+      : selectedPart ? "这个部件还没有报告过。" : "还没有记录。连上板子后，板子输出的内容会出现在这里。";
     $("stream").append(el("p", message));
   }
   $("stream").scrollTop = frozenLogs ? previousTop : $("stream").scrollHeight;
@@ -347,7 +343,7 @@ function plots() {
     }
   $("charts").replaceChildren();
   if (!channels.size)
-    $("charts").append(el("p", '等待串口数值，例如 {"x":1.2,"y":3.4}'));
+    $("charts").append(el("p", '还没有能画的数字。板子输出像 {"x":1.2,"y":3.4} 这样的行，就会出现曲线。'));
   for (const [k, vs] of channels) {
     const box = el("div");
     box.className = "plot";
@@ -391,24 +387,24 @@ async function refresh() {
     setLogFollow(true);
   }
   $("badge").textContent = state.connected
-    ? "● " + state.transport + " 已打开"
-    : "○ 本地服务在线";
+    ? "● 已连上板子"
+    : "○ 没连板子";
   $("run").textContent = "#" + state.run;
   renderCounts();
   $("bytes").textContent =
     state.rx.toLocaleString() + " / " + state.tx.toLocaleString();
-  $("job").textContent = state.job || "空闲";
-  $("echo").textContent = state.echo ? "关闭回声服务" : "开启回声服务";
+  $("job").textContent = state.job || "没有任务";
+  $("echo").textContent = state.echo ? "结束回声测试" : "开始回声测试";
   $("ota").value = state.echo;
   $("echoInfo").textContent = state.echo
-    ? "正在监听 · 收到 " + state.frames + " 个音频帧"
-    : "服务已关闭";
+    ? "正在等板子连过来 · 已收到 " + state.frames + " 段声音"
+    : "回声测试没开";
   const checkin = state.echo_checkin;
   const checkinLink = $("echoCheckin");
   checkinLink.hidden = !checkin;
   if (checkin) {
     const summary = Object.entries(checkin.fields).map(([k, v]) => k + " " + v).join(" · ");
-    checkinLink.textContent = "最近局域网签到 · " + (summary || "未提供型号信息") + " · L" + checkin.log_id;
+    checkinLink.textContent = "板子最近一次连过来 · " + (summary || "没说型号") + " · L" + checkin.log_id;
     checkinLink.onclick = handle(() => showEvidence({run: checkin.run}, "L" + checkin.log_id));
   }
   $("logCSV").href = "/api/report/" + state.run + "/csv";
@@ -425,12 +421,12 @@ async function refresh() {
     $("port").replaceChildren(
       ...rows.map((x) => new Option(x.path + " · " + (x.saved?.name || x.label), x.path)),
     );
-    if (!rows.length) $("port").add(new Option("等待 USB 串口", ""));
+    if (!rows.length) $("port").add(new Option("没找到 USB 端口", ""));
     if (rows.some((x) => x.path === chosen)) $("port").value = chosen;
     portSettings(rows);
     $("portNote").dataset.usb = rows.length
-      ? "已发现 " + rows.length + " 个串口"
-      : "请使用 USB 数据线连接设备。";
+      ? "找到 " + rows.length + " 个 USB 端口，选你的板子后点“连接”。"
+      : "请用 USB 数据线把板子接到电脑上。";
   }
   if (state.connected) {
     $("transport").value = state.transport;
@@ -446,8 +442,12 @@ async function refresh() {
   buttons();
   tests();
   renderSuite();
-  $("endurance").textContent = state.endurance ? "长测中 · " + state.endurance.variant : "稳定性长测";
+  $("endurance").textContent = state.endurance ? "稳定性测试中 · " + state.endurance.variant : "长时间稳定性测试";
+  $("usbMessage").textContent = state.auto_usb && !state.connected ? state.usb_message : "";
+  $("usbMessage").hidden = !$("usbMessage").textContent;
+  $("usbMessage").classList.toggle("warn", /重启|断开|失败|停止/.test(state.usb_message || ""));
   renderComponents();
+  renderFlash();
   renderOverview(state);
   renderMotion(state);
   updateSmart();
@@ -477,28 +477,28 @@ bind("connect", async () => {
 });
 bind("new", () => act("new", { profile: $("profile").value }));
 bind("probe", () => {
-  const body = modal("读取 ESP 芯片与 Flash");
+  const body = modal("读芯片型号和闪存");
   body.append(
     el(
       "p",
-      "将占用 " +
+      "会先停止接收 " +
         $("port").value +
-        " 并复位设备进入 ROM 下载模式。读取完成后设备重新启动，串口监视可手动重新连接。",
+        "，让板子重启进“下载模式”，读出芯片型号、闪存大小等信息，读完板子会再重启一次。不会改动板子里的内容。",
     ),
-    button("复位并读取", async () => {
+    button("重启并读取", async () => {
       await act("probe", { port: $("port").value });
       $("dialog").close();
     }),
   );
 });
 bind("backup", () => {
-  const body = modal("备份整片 Flash");
+  const body = modal("备份整块闪存");
   body.append(
     el(
       "p",
-      "设备将复位进入下载模式。读取完成后可在历史报告中下载 BIN 并核对 SHA-256。文件可能包含设备凭证，请保存在本机。",
+      "板子会重启进“下载模式”，把里面的全部内容读出来存到电脑上（16 MB 大约要几分钟），不会改动板子。读完后在“导出报告”里能下载这个备份文件。文件里可能有 Wi-Fi 密码等信息，请别随便发给别人。",
     ),
-    button("复位并读取备份", async () => {
+    button("重启并开始备份", async () => {
       await act("backup", { port: $("port").value });
       $("dialog").close();
     }),
@@ -562,7 +562,8 @@ bind("clearLogFilters", () => {
 for (const id of ["search", "level", "hex"]) $(id).oninput = () => logs(true);
 bind("history", async () => {
   const rows = await get("/api/history");
-  const body = modal("测试历史与报告");
+  const body = modal("导出报告和以前的记录");
+  body.append(el("p", "每次连接或换板子型号都会新开一条记录。选一条下载：TXT 给人看，JSON 是完整数据（给工具用），表格（CSV）能用 Excel 打开。"));
   archiveTools(body);
   for (const r of rows) {
     const box = el("div");
@@ -571,19 +572,19 @@ bind("history", async () => {
       el("strong", "#" + r.id + " · " + r.profile),
       el(
         "p",
-        new Date(r.started).toLocaleString() + " · " + (r.port || "未绑定设备"),
+        new Date(r.started).toLocaleString() + " · " + (r.port || "没连板子"),
       ),
     );
     const downloads = el("div");
     downloads.className = "report-downloads";
     for (const f of ["txt", "json", "csv"]) {
-      const a = el("a", f.toUpperCase() + " ↓");
+      const a = el("a", { txt: "TXT 报告", json: "JSON 完整数据", csv: "表格 CSV" }[f] + " ↓");
       a.href = "/api/report/" + r.id + "/" + f;
       downloads.append(a);
     }
     box.append(downloads);
     for (const f of r.backups || []) {
-      const a = el("a", "Flash 备份 ↓");
+      const a = el("a", "闪存备份文件 ↓");
       a.href = "/api/backup/" + f.id;
       box.append(a, el("p", "SHA-256 " + f.sha256));
     }
@@ -591,11 +592,11 @@ bind("history", async () => {
     actions.className = "row";
     actions.append(
       button("分享故障记录", () => previewPack(r.id)),
-      button("回放", () => {
+      button("回看", () => {
         $("dialog").close();
         openReplay(r.id);
       }),
-      button("AI 分析", () => {
+      button("AI 帮我看", () => {
         $("dialog").close();
         openAnalysis(r.id);
       }),
@@ -604,7 +605,8 @@ bind("history", async () => {
     body.append(box);
   }
 });
-for (const b of $("tabs").querySelectorAll("button"))
+const tabButtons = [...document.querySelectorAll(".rail [data-tab]")];
+for (const b of tabButtons)
   b.onclick = () => {
     document.body.classList.toggle("ai-view", ["analysis", "replay", "overview"].includes(b.dataset.tab));
     if (b.dataset.tab !== "monitor" && selectedPart) {
@@ -612,23 +614,33 @@ for (const b of $("tabs").querySelectorAll("button"))
       logs(true);
     }
     $("crumb").textContent = b.textContent.trim();
-    for (const n of $("tabs").querySelectorAll("button")) {
+    for (const n of tabButtons) {
       if (n === b) n.setAttribute("aria-current", "page");
       else n.removeAttribute("aria-current");
+      n.classList.toggle("active", n === b);
     }
+    if ($("moreTools").contains(b)) $("moreTools").open = true;
     document
       .querySelectorAll(".tab")
       .forEach((n) => (n.hidden = n.id !== b.dataset.tab));
-    $("tabs")
-      .querySelectorAll("button")
-      .forEach((n) => n.classList.toggle("active", n === b));
     if (state) {
       renderCounts();
       plots();
       if (b.dataset.tab === "hardware") updateSmart();
       if (b.dataset.tab === "overview") renderOverview(state);
       if (b.dataset.tab === "signal") renderMotion(state);
+      if (b.dataset.tab === "flash") renderFlash(true);
     }
+  };
+for (const b of document.querySelectorAll("[data-go]"))
+  b.onclick = () => {
+    if (b.dataset.go === "report") return $("history").click();
+    document.querySelector('.rail [data-tab="' + b.dataset.go + '"]').click();
+    if (b.dataset.errors) {
+      $("level").value = "ERROR";
+      logs(true);
+    }
+    if (b.dataset.focus) $(b.dataset.focus).focus();
   };
 $("workdate").textContent = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -659,10 +671,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!token) await setup();
       await refresh();
     } catch {
-      $("badge").textContent = "本地服务离线";
+      $("badge").textContent = "软件后台没响应";
       renderMotion(null);
       renderOverview(null);
-      if (!$("hardware").hidden) smartUnavailable("本地服务离线，恢复后继续检测。");
+      if (!$("hardware").hidden) smartUnavailable("软件后台没响应，恢复后会接着检查。");
     } finally {
       busy = false;
     }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>BoardBench · 板卡测试台</title>
+    <title>BoardBench · 板子测试台</title>
     <link rel="icon" href="/static/assets/boardbench.png" />
     <link rel="stylesheet" href="/static/style.css" />
     <link rel="stylesheet" href="/static/replay.css" />
@@ -22,58 +22,69 @@
     <script defer src="/static/motion.js"></script>
     <script defer src="/static/overview.js"></script>
     <script defer src="/static/diagnostics.js"></script>
+    <script defer src="/static/flash.js"></script>
   </head>
   <body>
     <aside class="rail">
       <div class="brand">
         <img class="brand-mark" src="/static/assets/boardbench.png" alt="" /><b>BoardBench</b>
       </div>
-      <div class="rail-label">工作区</div>
-      <nav id="tabs" aria-label="工具">
+      <div class="rail-label">常用</div>
+      <nav id="tabs" aria-label="常用">
         <button data-tab="monitor" class="active" aria-current="page">
-          <i aria-hidden="true" class="ico activity"></i>元件监视
+          <i aria-hidden="true" class="ico activity"></i>板子状态
         </button>
-        <button data-tab="overview">
-          <i aria-hidden="true" class="ico squares-four"></i>监控总览
+        <button data-tab="flash">
+          <i aria-hidden="true" class="ico arrows-down-up"></i>刷固件
         </button>
-        <button data-tab="hardware">
-          <i aria-hidden="true" class="ico cpu"></i>硬件检测
+        <button data-tab="help">
+          <i aria-hidden="true" class="ico checks"></i>出问题了
         </button>
-        <button data-tab="terminal">
-          <i aria-hidden="true" class="ico terminal"></i>通信终端
-        </button>
-        <button data-tab="signal">
-          <i aria-hidden="true" class="ico waveform"></i>数据曲线
-        </button>
-        <button data-tab="voice">
-          <i aria-hidden="true" class="ico microphone"></i>小智回声
-        </button>
-        <button data-tab="replay">
-          <i aria-hidden="true" class="ico clock-counter-clockwise"></i>会话回放
-        </button>
-        <button data-tab="analysis">
-          <i class="ico waveform" aria-hidden="true"></i>AI 分析
+        <button id="history">
+          <i aria-hidden="true" class="ico stack"></i>导出报告
         </button>
       </nav>
+      <details id="moreTools" class="rail-more">
+        <summary class="rail-label">更多工具</summary>
+        <nav aria-label="更多工具">
+          <button data-tab="hardware">
+            <i aria-hidden="true" class="ico cpu"></i>自动体检
+          </button>
+          <button data-tab="overview">
+            <i aria-hidden="true" class="ico squares-four"></i>总览图表
+          </button>
+          <button data-tab="terminal">
+            <i aria-hidden="true" class="ico terminal"></i>发命令
+          </button>
+          <button data-tab="signal">
+            <i aria-hidden="true" class="ico waveform"></i>读数曲线
+          </button>
+          <button data-tab="voice">
+            <i aria-hidden="true" class="ico microphone"></i>语音回声
+          </button>
+          <button data-tab="replay">
+            <i aria-hidden="true" class="ico clock-counter-clockwise"></i>回看记录
+          </button>
+          <button data-tab="analysis">
+            <i class="ico waveform" aria-hidden="true"></i>AI 帮我看
+          </button>
+        </nav>
+      </details>
       <div class="rail-bottom">
-        <button id="history">
-          <i aria-hidden="true" class="ico clock-counter-clockwise"></i
-          >历史与报告
-        </button>
         <div class="host">
           <span class="status-led"></span
-          ><span>本地工作区<small>127.0.0.1</small></span>
+          ><span>只在这台电脑上运行<small>127.0.0.1</small></span>
         </div>
       </div>
     </aside>
     <main>
       <header class="top">
         <div class="crumb">
-          <i aria-hidden="true" class="ico squares-four"></i> 工作区
-          <span>/</span> <b id="crumb">元件监视</b>
+          <i aria-hidden="true" class="ico squares-four"></i> BoardBench
+          <span>/</span> <b id="crumb">板子状态</b>
         </div>
         <div class="top-tools">
-          <span id="badge" role="status">连接本地服务中</span
+          <span id="badge" role="status">正在启动…</span
           ><button id="theme" aria-label="切换明暗主题">
             <i aria-hidden="true" class="ico circle-half"></i>
           </button>
@@ -81,7 +92,7 @@
       </header>
       <div class="workarea">
         <div class="heading">
-          <h1>板卡测试台</h1>
+          <h1>板子测试台</h1>
           <span id="workdate"></span>
         </div>
         <section class="connect">
@@ -89,10 +100,10 @@
             <div class="instrument-title">
               <span class="link-label"
                 ><span class="lamp"></span
-                ><span id="linkState">设备未连接</span></span
+                ><span id="linkState">还没连上板子</span></span
               >
-              <h2 id="linkTitle">连接测试设备</h2>
-              <p id="portNote">正在枚举本机串口…</p>
+              <h2 id="linkTitle">连接板子</h2>
+              <p id="portNote">正在找电脑上的 USB 端口…</p>
             </div>
             <canvas
               id="boardArt"
@@ -103,24 +114,24 @@
           </div>
           <div class="controls" data-mode="serial">
             <div class="connection-fields">
-              <label>连接方式
+              <label>怎么连
                 <select id="transport">
-                  <option value="串口">USB 串口</option>
-                  <option>TCP</option>
-                  <option>UDP</option>
+                  <option value="串口">USB 线</option>
+                  <option value="TCP">网络 · TCP</option>
+                  <option value="UDP">网络 · UDP</option>
                 </select>
               </label>
-              <label class="net" hidden>设备地址
+              <label class="net" hidden>板子的网络地址
                 <input id="host" placeholder="IP 或主机名" autocapitalize="none" spellcheck="false" />
               </label>
-              <label class="net" hidden>端口
+              <label class="net" hidden>端口号
                 <input id="netPort" type="number" min="1" max="65535" placeholder="9000" />
               </label>
-              <label class="usb">串口设备<select id="port"></select></label>
-              <label class="usb">波特率
+              <label class="usb">选板子（USB 端口）<select id="port"></select></label>
+              <label class="usb" title="大多数板子用 115200。看到乱码时再换。">速度（波特率）
                 <input id="baud" type="number" min="300" max="4000000" value="115200" />
               </label>
-              <label class="usb">格式
+              <label class="usb" title="几乎所有板子都是 8N1，不用改。">数据格式
                 <select id="framing">
                   <option>8N1</option><option>8E1</option><option>8O1</option>
                   <option>8N2</option><option>7E1</option><option>7O1</option>
@@ -128,28 +139,28 @@
               </label>
             </div>
             <div class="connection-actions">
-              <button class="primary" id="connect" disabled aria-describedby="portNote">连接串口</button>
-              <button class="usb" id="scan">扫描</button>
-              <button class="usb" id="knownUsb">已记住设备</button>
+              <button class="primary" id="connect" disabled aria-describedby="portNote">连接</button>
+              <button class="usb" id="scan">重新找端口</button>
+              <button class="usb" id="knownUsb">记住的板子</button>
             </div>
           </div>
         </section>
         <div class="stats">
           <div>
-            <i aria-hidden="true" class="ico stack"></i><small>当前测试</small
+            <i aria-hidden="true" class="ico stack"></i><small>这次记录的编号</small
             ><strong id="run">—</strong>
           </div>
           <div>
             <i aria-hidden="true" class="ico checks"></i
-            ><small id="countsLabel">验收通过 / 失败</small><strong id="counts">0 / 0</strong>
+            ><small id="countsLabel">检查通过 / 没通过</small><strong id="counts">0 / 0</strong>
           </div>
           <div>
             <i aria-hidden="true" class="ico arrows-down-up"></i
-            ><small>接收 / 发送字节</small><strong id="bytes">0 / 0</strong>
+            ><small>收到 / 发出的数据（字节）</small><strong id="bytes">0 / 0</strong>
           </div>
           <div>
             <i aria-hidden="true" class="ico activity"></i
-            ><small>当前任务</small><strong id="job">空闲</strong>
+            ><small>正在做</small><strong id="job">没有任务</strong>
           </div>
         </div>
         <div class="grid">
@@ -158,9 +169,11 @@
             <section id="monitor" class="tab">
               <div class="section-title">
                 <i class="ico activity" aria-hidden="true"></i>
-                <h2>元件实时监视</h2>
-                <button id="openSmart" class="text-link">查看智能检测 →</button>
+                <h2>板子上各个部件的状态</h2>
+                <button id="openSmart" class="text-link">做一次自动体检 →</button>
               </div>
+              <p class="explain"><b>这是什么：</b>连上板子后，这里只“听”板子自己说的话，不会给它发任何东西。板子报告了哪个部件（屏幕、Wi-Fi、喇叭…），就列出哪个。
+                <b>该怎么看：</b>绿色“有读数 / 有应答”是正常；红色是板子自己报了错；“未上报”只表示固件没说，不代表坏了。点部件名能看它的原始记录。</p>
               <div class="monitor-summary">
                 <strong id="monitorInfo"></strong>
                 <div id="deviceIdentity" class="row" aria-label="设备上报的标识" hidden></div>
@@ -168,45 +181,109 @@
               </div>
               <div class="monitor-toolbar">
                 <div class="monitor-bar">
-                  <label class="checkline"><input type="checkbox" id="autoUsb" />USB 自动连接</label>
-                  <label class="checkline"><input type="checkbox" id="onlyReported" />仅显示已上报</label>
+                  <label class="checkline" title="插上记住的板子时自动连接，只接收不发送。"><input type="checkbox" id="autoUsb" />插上就自动连接</label>
+                  <label class="checkline"><input type="checkbox" id="onlyReported" />只看有报告的部件</label>
                 </div>
                 <div class="monitor-actions">
-                  <button id="cadence">元件上报设置</button>
-                  <button id="endurance">稳定性长测</button>
+                  <button id="cadence">多久没报算超时</button>
+                  <button id="endurance">长时间稳定性测试</button>
                 </div>
               </div>
+              <p id="usbMessage" class="usb-message" role="status" hidden></p>
               <div class="part-table">
                 <table>
                   <thead>
                     <tr>
-                      <th>元件</th>
+                      <th>部件</th>
                       <th>状态</th>
-                      <th>最新读数 / 输出</th>
+                      <th>最新读数 / 板子说的话</th>
                       <th>更新时间</th>
                     </tr>
                   </thead>
                   <tbody id="componentRows"></tbody>
                 </table>
-                <p id="emptyParts" hidden>尚无元件上报。收到支持的固件日志后，元件会自动出现。</p>
+                <p id="emptyParts" hidden>还没有部件报告。板子说出能看懂的信息后，部件会自动出现。</p>
+              </div>
+            </section>
+            <section id="flash" class="tab" hidden>
+              <div class="section-title">
+                <i class="ico arrows-down-up" aria-hidden="true"></i>
+                <h2>刷固件</h2>
+              </div>
+              <p class="explain"><b>这是什么：</b>把新的程序（固件）写进板子。每一步都先检查、先备份；Wi-Fi、音量这些设置默认不动；刷坏了可以一键恢复。
+                <b>注意：</b>刷写时别拔线、别关软件。看板子状态时软件只“听”不写，只有在这里点了按钮才会写板子。</p>
+              <ol id="flashSteps" class="flash-steps" aria-label="刷固件的步骤"></ol>
+              <div id="flashBody" aria-live="polite"></div>
+            </section>
+            <section id="help" class="tab" hidden>
+              <div class="section-title">
+                <i class="ico checks" aria-hidden="true"></i>
+                <h2>出问题了怎么办</h2>
+              </div>
+              <p class="explain">按你看到的情况，从上往下试。每一条后面的按钮会直接带你去对应的地方。</p>
+              <div class="help-list">
+                <details open>
+                  <summary>列表里找不到我的板子 / 连不上</summary>
+                  <ol>
+                    <li>换一根<b>能传数据</b>的 USB 线（有些线只能充电），插紧。</li>
+                    <li>关掉别的串口软件（Arduino 串口监视器、其他刷机工具），它们会占着端口。</li>
+                    <li>Windows：在“设备管理器”里看有没有带黄色感叹号的设备，有的话装板子 USB 芯片的驱动（常见 CH340、CP210x）。</li>
+                    <li>点“重新找端口”。还不行就拔掉再插一次。</li>
+                  </ol>
+                  <div class="row"><button data-go="monitor" data-focus="scan">去连接板子</button></div>
+                </details>
+                <details>
+                  <summary>板子一直重启、连上又断开</summary>
+                  <p>有些板子（比如用自带 USB 口的 ESP32-S3）在电脑“打开”端口时会被重启。本软件已经用不会触发重启的方式打开端口；如果板子刚连上就断，软件会等一会儿再连，连续 3 次都这样就停下来，并在“板子状态”页说明原因。</p>
+                  <p>还是反复重启：换到板子上标着 <b>UART</b> 的那个 USB 口，或者看看是不是供电不够（换个 USB 口、别用延长线）。</p>
+                  <div class="row"><button data-go="monitor">看板子状态</button></div>
+                </details>
+                <details>
+                  <summary>能连上，但屏幕、声音或按键不正常</summary>
+                  <ol>
+                    <li>先做“自动体检”，看哪个部件被标成“异常”，点后面的日志编号看原文。</li>
+                    <li>在右边的记录里只看“出错”，常常能直接看到原因。</li>
+                    <li>需要人一项一项确认的（看屏幕、听声音），用自动体检页最下面的“人工逐项检查”。</li>
+                  </ol>
+                  <div class="row"><button data-go="hardware">做自动体检</button><button data-go="monitor" data-errors="1">只看出错的记录</button></div>
+                </details>
+                <details>
+                  <summary>刷完固件开不了机 / 刷坏了</summary>
+                  <ol>
+                    <li>每次刷写前软件都自动备份了。到“刷固件”页最下面的“以前的备份”，点“恢复这个备份”。</li>
+                    <li>如果软件连不上板子：按住板子上的 <b>BOOT</b> 键，再按一下 <b>RESET</b>（或 RST）键，松开 BOOT，然后再点恢复。</li>
+                  </ol>
+                  <div class="row"><button data-go="flash">去恢复备份</button></div>
+                </details>
+                <details>
+                  <summary>想请别人帮忙看看</summary>
+                  <ol>
+                    <li>“导出报告”：TXT 给人看，JSON 是完整数据，表格（CSV）能用 Excel 打开。</li>
+                    <li>“分享故障记录”（在导出报告里）：只打包出错前后的内容，会先遮住密码、地址等敏感信息，你还能再删改。</li>
+                    <li>“AI 帮我看”：用你自己设置的 AI 分析，发送前会先给你看内容。</li>
+                  </ol>
+                  <div class="row"><button data-go="report">导出报告</button><button data-go="analysis">AI 帮我看</button></div>
+                </details>
               </div>
             </section>
             <section id="hardware" class="tab" hidden>
               <div class="section-title smart-heading">
                 <i class="ico cpu" aria-hidden="true"></i>
-                <h2>智能检测</h2>
+                <h2>自动体检</h2>
                 <span id="smartLive">等待连接</span>
               </div>
+              <p class="explain"><b>这是什么：</b>根据板子自己输出的信息，自动判断每个部件是好是坏，不会给板子发命令。
+                <b>该怎么看：</b>“已验证”有证据说明正常；“异常”是板子报了错；“证据不足”只是还没看到相关信息。点“日志 L123”能看原文。</p>
               <details class="smart-profile">
-                <summary><span>检测板型</span> <strong id="smartProfileName"></strong></summary>
-                <label for="profile">设备与固件</label>
+                <summary><span>板子型号</span> <strong id="smartProfileName"></strong></summary>
+                <label for="profile">选和你手上一样的板子和固件；不确定就选“通用串口设备”</label>
                 <div class="row">
                   <select id="profile"></select>
-                  <button id="new">用此板型新建测试</button>
+                  <button id="new">换成这个型号重新记录</button>
                 </div>
               </details>
               <p id="smartHelp" role="status">连接板子后会自动读取日志并显示结论。</p>
-              <button id="stopManualForSmart" hidden>结束人工验收</button>
+              <button id="stopManualForSmart" hidden>结束人工检查</button>
               <div id="smartSummary" class="smart-summary" hidden></div>
               <div id="smartMain" class="smart-list"></div>
               <details id="smartPending" class="smart-disclosure" hidden>
@@ -214,30 +291,31 @@
                 <div id="smartPendingRows" class="smart-list"></div>
               </details>
               <div class="row smart-actions">
-                <button id="smartSave" disabled>保存检测快照</button>
+                <button id="smartSave" disabled>保存这次体检结果</button>
                 <span id="smartSaved" role="status"></span>
                 <a id="smartTxt" class="text-link" hidden download>导出 TXT</a>
                 <a id="smartJson" class="text-link" hidden download>导出 JSON</a>
               </div>
               <details id="manualSuite" class="manual-suite">
-                <summary>人工验收与高级工具<span id="manualFlag"></span></summary>
+                <summary>人工逐项检查和高级工具<span id="manualFlag"></span></summary>
                 <div class="suite-box">
                   <div class="section-title">
                     <i class="ico checks" aria-hidden="true"></i>
-                    <h2>分组验收</h2>
+                    <h2>按步骤人工检查</h2>
                   </div>
+                  <p>软件一组一组告诉你要看什么、听什么，你按实际情况选“通过 / 失败 / 跳过”。</p>
                   <div id="suiteLaunch">
                     <p id="suiteScope"></p>
                     <div class="row">
-                      <button id="runBoard">开始完整验收</button
-                      ><button id="runQuick">简短验收</button>
+                      <button id="runBoard">全部检查一遍</button
+                      ><button id="runQuick">只查常用的</button>
                     </div>
                   </div>
                   <div id="suiteProgress" aria-live="polite"></div>
                 </div>
                 <div class="row">
-                  <button id="import">导入配置</button
-                  ><a id="template" class="button">下载配置</a
+                  <button id="import">导入检查清单</button
+                  ><a id="template" class="button">下载检查清单</a
                   ><input
                     type="file"
                     hidden
@@ -246,34 +324,34 @@
                   />
                 </div>
                 <div class="divider"></div>
-                <h2 id="suite">检测项目</h2>
+                <h2 id="suite">检查项目</h2>
                 <div class="row">
-                  <button id="probe">读取 ESP 芯片与 Flash</button
-                  ><button id="backup">备份 Flash</button
-                  ><button id="all">运行命令项</button
-                  ><button id="stop">停止任务</button>
+                  <button id="probe" title="让板子进下载模式读出芯片型号和闪存大小，板子会重启。">读芯片型号和闪存</button
+                  ><button id="backup" title="把板子上的全部内容读出来存到电脑上。">备份整块闪存</button
+                  ><button id="all" title="按清单给板子发命令并等它回答。">自动发命令检查</button
+                  ><button id="stop">停止当前任务</button>
                 </div>
                 <div id="tests"></div>
               </details>
             </section>
             <section id="terminal" class="tab" hidden>
-              <h2>发送数据</h2>
-              <p>收发内容和原始字节会记录在事件日志中。</p>
+              <h2>给板子发命令</h2>
+              <p class="explain"><b>这是什么：</b>直接给板子发一段文字或数据，适合知道板子支持哪些命令的人。不知道发什么就不用这个页面。发出和收到的内容都会记在右边的记录里。</p>
               <label
-                >内容<textarea
+                >要发的内容<textarea
                   id="sendText"
                   rows="4"
-                  placeholder="输入命令或十六进制字节"
+                  placeholder="输入命令；选“十六进制”时输入像 01 02 0A 这样的字节"
                 ></textarea>
               </label>
               <div class="row terminal-options">
                 <label
-                  >编码<select id="encoding">
-                    <option>UTF-8</option>
-                    <option>HEX</option>
+                  >按什么发<select id="encoding">
+                    <option value="UTF-8">文字</option>
+                    <option value="HEX">十六进制</option>
                   </select></label
-                ><label
-                  >行尾<select id="ending">
+                ><label title="大多数命令行固件用 CRLF（回车换行）。"
+                  >结尾加<select id="ending">
                     <option>CRLF</option>
                     <option>LF</option>
                     <option>CR</option>
@@ -282,63 +360,58 @@
                 ><button class="primary" id="send">发送</button>
               </div>
               <div class="divider"></div>
-              <h2>测试备注</h2>
-              <p>记录线材、供电方式、复位动作或异常现象。</p>
-              <label>观察记录<textarea id="noteText" rows="3"></textarea></label
-              ><button id="note">加入日志</button>
+              <h2>写个备注</h2>
+              <p>记下用的什么线、怎么供电、按了什么键、看到了什么怪现象，导出报告时会一起带上。</p>
+              <label>备注<textarea id="noteText" rows="3"></textarea></label
+              ><button id="note">记到记录里</button>
             </section>
             <section id="signal" class="tab" hidden>
               <section id="motionView"></section>
-              <h2>传感器实时曲线</h2>
-              <p>
-                从最近 350 条日志的 RX 行提取数值。支持 JSON 对象、数值 CSV 和
-                key=value，按通道独立缩放。
-              </p>
+              <h2>读数曲线</h2>
+              <p class="explain"><b>这是什么：</b>把板子最近输出的数字画成曲线（例如温度、电压）。板子要输出像
+                <code>{"temp":23.5}</code>、<code>temp=23.5</code> 或 <code>1.2,3.4</code> 这样的行，才有曲线。</p>
               <div id="charts"></div>
             </section>
             <section id="voice" class="tab" hidden>
-              <h2>局域网语音回声</h2>
-              <p>
-                支持可配置 OTA 地址的小智 WebSocket v1
-                固件。将板子与电脑连到同一 Wi-Fi，选择电脑在该网络的 IPv4。
-              </p>
+              <h2>语音回声测试（小智）</h2>
+              <p class="explain"><b>这是什么：</b>检查小智板子的麦克风和喇叭：你对板子说话，电脑把声音原样传回去让板子播放。不用联网到云端。
+                <b>要求：</b>板子和电脑连同一个 Wi-Fi，固件允许改“OTA 地址”（WebSocket v1 协议）。</p>
               <div class="row voice-options">
-                <label>本机 IPv4<input id="ip" /></label
+                <label title="电脑在这个 Wi-Fi 里的地址，一般自动填好。">电脑的局域网地址<input id="ip" /></label
                 ><label
-                  >端口<input id="lanPort" type="number" value="8788"
+                  >端口号<input id="lanPort" type="number" value="8788"
                 /></label>
-                <button class="primary" id="echo">开启回声服务</button>
+                <button class="primary" id="echo">开始回声测试</button>
               </div>
               <p id="echoInfo"></p>
               <button id="echoCheckin" class="text-link" hidden></button>
               <label
-                >设备 OTA 地址<input
+                >填到板子里的 OTA 地址<input
                   id="ota"
                   readonly
-                  placeholder="开启服务后显示"
+                  placeholder="点“开始回声测试”后显示"
               /></label>
               <p>
-                先记下板子的原 OTA
-                地址，再在配网页中临时换成上方地址。唤醒后报一组数字，最多录 3
-                秒，随后板端回放。测试结束后恢复原地址。
+                步骤：① 先抄下板子原来的 OTA 地址；② 在板子的配网页面里临时换成上面的地址；③ 唤醒板子，说一串数字（最多录 3 秒），板子会把你的声音播回来；④ 测完把原地址改回去。
               </p>
               <p>
-                日志分别记录签到、握手、录音状态与回送帧数。音质和屏幕文字由你现场确认。
+                声音清不清楚、屏幕字对不对，由你自己判断；右边的记录会写下每一步有没有成功。
               </p>
             </section>
             <section id="replay" class="tab" hidden></section>
             <section id="analysis" class="tab" hidden>
               <div class="section-title">
                 <i class="ico waveform" aria-hidden="true"></i>
-                <h2>AI 分析</h2>
+                <h2>AI 帮我看</h2>
               </div>
+              <p class="explain"><b>这是什么：</b>把这次记录里的错误和前后几行交给你自己配置的 AI 模型，请它帮忙分析原因。发送前一定先给你看要发出去的内容，确认后才发。</p>
               <div class="ai-layout">
                 <div class="ai-controls">
-                  <label>测试会话<select id="aiRun"></select></label>
+                  <label>哪次记录<select id="aiRun"></select></label>
                   <label
-                    >证据范围<select id="aiFocus">
-                      <option value="fault">异常及前后日志</option>
-                      <option value="recent">最近 60 条日志</option>
+                    >给 AI 看哪些内容<select id="aiFocus">
+                      <option value="fault">出错的地方和前后几行</option>
+                      <option value="recent">最近 60 行记录</option>
                     </select></label
                   >
                   <label
@@ -349,9 +422,9 @@
                       placeholder="例如：为什么设备能签到，却没有声音？"
                     ></textarea>
                   </label>
-                  <button id="aiPreview" class="primary">预览分析内容</button>
+                  <button id="aiPreview" class="primary">先看看要发什么</button>
                   <details id="aiSettings">
-                    <summary>模型与接口设置</summary>
+                    <summary>设置用哪个 AI（第一次用先填这里）</summary>
                     <label
                       >API 地址<input
                         type="url"
@@ -391,7 +464,7 @@
                 </div>
                 <div class="ai-output">
                   <div id="aiPayload" role="region" aria-label="分析资料预览" tabindex="-1" hidden></div>
-                  <h2>已保存的分析</h2>
+                  <h2>以前的分析</h2>
                   <div id="aiResults"></div>
                 </div>
               </div>
@@ -402,12 +475,12 @@
               <div>
                 <div class="section-title">
                   <i aria-hidden="true" class="ico terminal-window"></i>
-                  <h2>事件日志</h2>
+                  <h2>记录</h2>
                 </div>
               </div>
               <div class="row">
-                <button id="analyzeFromLog">分析本次测试</button
-                ><button id="pause" aria-pressed="false">暂停跟随</button>
+                <button id="analyzeFromLog">让 AI 看看</button
+                ><button id="pause" aria-pressed="false">停在这里</button>
               </div>
             </div>
             <div id="partScope" hidden>
@@ -418,22 +491,22 @@
                 id="search"
                 type="search"
                 aria-label="搜索日志"
-                placeholder="搜索内容、来源或时间…"
-              /><select id="level" aria-label="日志等级">
-                <option value="">所有等级</option>
-                <option>ERROR</option>
-                <option>WARN</option>
-                <option>PASS</option>
-                <option>INFO</option>
-                <option>RX</option>
-                <option>TX</option>
-                <option>NOTE</option></select
-              ><label><input id="hex" type="checkbox" /> HEX</label>
+                placeholder="搜索记录…"
+              /><select id="level" aria-label="只看哪一类">
+                <option value="">全部</option>
+                <option value="ERROR">出错（ERROR）</option>
+                <option value="WARN">警告（WARN）</option>
+                <option value="PASS">通过（PASS）</option>
+                <option value="INFO">软件提示（INFO）</option>
+                <option value="RX">板子说的（RX）</option>
+                <option value="TX">发给板子的（TX）</option>
+                <option value="NOTE">我的备注（NOTE）</option></select
+              ><label title="显示原始字节"><input id="hex" type="checkbox" /> 原始字节</label>
               <button id="clearLogFilters" hidden>清除筛选</button>
             </div>
             <div class="stream" id="stream" tabindex="0"></div>
             <div class="logfoot">
-              <span id="logCount"></span><a id="logCSV">导出 CSV ↓</a>
+              <span id="logCount"></span><a id="logCSV" title="表格文件，Excel 能打开">导出表格 ↓</a>
             </div>
           </section>
         </div>

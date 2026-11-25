@@ -10,6 +10,20 @@ import time
 from aiohttp import web
 
 
+class Picker:
+    """Native open dialogs for the flashing wizard (window.pywebview.api.pick_firmware)."""
+
+    def __init__(self):
+        self._window = None
+
+    def pick_firmware(self, folder=False):
+        import webview
+
+        kind = webview.FileDialog.FOLDER if folder else webview.FileDialog.OPEN
+        chosen = self._window.create_file_dialog(kind) if self._window else None
+        return chosen[0] if chosen else ""
+
+
 def run_window(port, make_service, smoke=False):
     import webview
 
@@ -51,12 +65,14 @@ def run_window(port, make_service, smoke=False):
         loop, stop = ready.result()
         try:
             webview.settings["ALLOW_DOWNLOADS"] = True
+            picker = Picker()
             window = webview.create_window(
-                "BoardBench · 板卡测试台",
+                "BoardBench · 板子测试台",
                 f"http://127.0.0.1:{listener.getsockname()[1]}",
                 width=1360, height=900, min_size=(700, 520),
-                text_select=True, background_color="#f5f5f7",
+                text_select=True, background_color="#f5f5f7", js_api=picker,
             )
+            picker._window = window
             checked = concurrent.futures.Future()
 
             def verify_window():
@@ -67,7 +83,7 @@ def run_window(port, make_service, smoke=False):
                         if window.evaluate_js(
                             "document.querySelector('#emptyParts')?.hidden === false && "
                             "document.querySelectorAll('#componentRows tr').length === 0 && "
-                            "document.querySelector('#monitorInfo').textContent.includes('0 个元件有上报')"
+                            "document.querySelector('#monitorInfo').textContent.includes('0 个部件有报告')"
                         ):
                             interactions_ok = window.evaluate_js("""
                                 (() => {
@@ -92,7 +108,7 @@ def run_window(port, make_service, smoke=False):
                                 raise RuntimeError("桌面窗口连接校验或日志交互异常")
                             window.evaluate_js("document.querySelector('[data-tab=overview]').click()")
                             if not window.evaluate_js(
-                                "document.querySelector('#ovParts p')?.textContent === '当前筛选没有元件。' && "
+                                "document.querySelector('#ovParts p')?.textContent === '没有符合条件的部件。' && "
                                 "document.querySelectorAll('#ovParts button').length === 0 && "
                                 "document.querySelector('#ovCoverage strong').textContent === '—'"
                             ):
@@ -114,6 +130,15 @@ def run_window(port, make_service, smoke=False):
                             window.evaluate_js("document.querySelector('[data-tab=signal]').click()")
                             if not window.evaluate_js("!!document.querySelector('#motionView .motion-dial')"):
                                 raise RuntimeError("桌面窗口未显示水平仪")
+                            window.evaluate_js("document.querySelector('[data-tab=flash]').click()")
+                            for _ in range(60):
+                                if window.evaluate_js("document.querySelector('#flashBody')?.textContent.includes('第 1 步：选固件')"):
+                                    break
+                                time.sleep(.1)
+                            else:
+                                raise RuntimeError("桌面窗口未显示刷固件向导")
+                            if not window.evaluate_js("!!window.pywebview?.api?.pick_firmware"):
+                                raise RuntimeError("桌面窗口缺少选择文件的接口")
                             window.evaluate_js("document.querySelector('[data-tab=replay]').click()")
                             for _ in range(60):
                                 if window.evaluate_js("document.querySelector('#rpPlayer')?.hidden === false"):

@@ -3,16 +3,16 @@
 const smartLabels = {
   verified: "已验证",
   fault: "异常",
-  absent: "固件声明未安装",
-  observe: "需现场观察",
-  unknown: "证据不足",
+  absent: "固件说没装",
+  observe: "需要你看一眼",
+  unknown: "还看不出来",
 };
 const smartNodes = new Map();
 let smartCounts, smartRun, smartLoading = false, smartSaving = false, smartReady = false;
 
 function renderCounts() {
   const hardware = !$("hardware").hidden;
-  $("countsLabel").textContent = hardware ? "已验证 / 异常" : "验收通过 / 失败";
+  $("countsLabel").textContent = hardware ? "正常 / 异常" : "检查通过 / 没通过";
   const active = state.connected && smartRun === state.run && smartCounts;
   $("counts").textContent = hardware
     ? (active || "— / —")
@@ -53,7 +53,7 @@ function smartRow(row, run) {
   if (row.log_id) {
     const ref = "L" + row.log_id;
     parts.evidence.textContent = "日志 " + ref;
-    parts.evidence.setAttribute("aria-label", row.name + "的证据日志 " + ref);
+    parts.evidence.setAttribute("aria-label", row.name + "的原始记录 " + ref);
     parts.evidence.onclick = handle(() => showEvidence({ run }, ref));
   }
   return parts.box;
@@ -73,8 +73,8 @@ function renderSmart(data) {
   if (!data.connected) {
     const job = state.job && state.suite?.status === "运行中";
     smartUnavailable(job
-      ? "当前未连接设备。结束人工验收后即可连接板子，已记录的结果将保留。"
-      : "用数据线连接板子的 UART 口，首次在上方选择串口并连接。随后自动检测。");
+      ? "现在没连板子。结束人工检查后就能连，已经记下的结果会保留。"
+      : "先在上面连上板子（用数据线接到电脑），连上后自动开始体检。");
     return;
   }
   smartReady = true;
@@ -87,10 +87,10 @@ function renderSmart(data) {
   smartCounts = groups.verified.length + " / " + groups.fault.length;
   renderCounts();
   const message = groups.fault.length
-    ? "设备已报告异常，点击对应的日志可查看原文。"
+    ? "板子报告了问题，点后面的“日志 L…”能看原文。"
     : !data.rows.some((r) => r.log_id)
-      ? "正在监听板端输出。首条有效读数到达后会自动显示结论。"
-      : "结论随板端日志自动更新。断开连接时会保存本次有上报的结果。";
+      ? "正在听板子说话，收到第一条有用的信息就会显示结论。"
+      : "结论会随着板子的输出自动更新；断开时会自动保存一份。";
   if ($("smartHelp").textContent !== message) $("smartHelp").textContent = message;
   const summary = $("smartSummary");
   summary.hidden = false;
@@ -105,7 +105,7 @@ function renderSmart(data) {
   const observed = groups.observe.filter((r) => r.log_id);
   fillSmartList($("smartMain"), [...groups.fault, ...observed, ...groups.verified, ...groups.absent], data.run);
   const pending = [...groups.observe.filter((r) => !r.log_id), ...groups.unknown];
-  $("smartPendingLabel").textContent = "待验证项目 · " + pending.length;
+  $("smartPendingLabel").textContent = "还没看出结果的项目 · " + pending.length;
   $("smartPending").hidden = !pending.length;
   fillSmartList($("smartPendingRows"), pending, data.run);
 }
@@ -116,7 +116,7 @@ async function updateSmart() {
   $("stopManualForSmart").hidden = state.connected || state.suite?.status !== "运行中";
   if (smartRun !== state.run) {
     smartRun = state.run;
-    smartUnavailable("正在读取当前会话…");
+    smartUnavailable("正在读取…");
     $("smartPending").open = false;
     $("smartSaved").textContent = "";
     for (const [id, format] of [["smartTxt", "txt"], ["smartJson", "json"]]) {
@@ -136,14 +136,14 @@ async function updateSmart() {
     if (state.run === run && data.run === run && data.connected === state.connected)
       renderSmart(data);
   } catch {
-    if (state.run === run) smartUnavailable("暂时无法读取检测结果，稍后会自动重试。");
+    if (state.run === run) smartUnavailable("暂时读不到体检结果，稍后自动重试。");
   } finally {
     smartLoading = false;
   }
 }
 
 bind("openSmart", () => {
-  $("tabs").querySelector('[data-tab="hardware"]').click();
+  document.querySelector('.rail [data-tab="hardware"]').click();
   $("hardware").scrollIntoView({block: "nearest"});
 });
 bind("smartSave", async () => {

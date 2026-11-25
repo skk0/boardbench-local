@@ -4,37 +4,37 @@ const renderOverview = (() => {
   const panel = $("overview");
   panel.innerHTML = `
     <div class="ov-bar">
-      <div class="ov-tabs" role="group" aria-label="监控视图"><button id="ovBoardTab" aria-pressed="true">板卡总览</button><button id="ovPowerTab" aria-pressed="false">能源监控</button><button id="ovRuntimeTab" aria-pressed="false">运行监控</button></div>
-      <div class="ov-actions"><span id="ovStatus" class="ov-status"></span><button id="ovConnect">连接设置</button></div>
+      <div class="ov-tabs" role="group" aria-label="监控视图"><button id="ovBoardTab" aria-pressed="true">板子总览</button><button id="ovPowerTab" aria-pressed="false">电源</button><button id="ovRuntimeTab" aria-pressed="false">运行情况</button></div>
+      <div class="ov-actions"><span id="ovStatus" class="ov-status"></span><button id="ovConnect">去连接板子</button></div>
     </div>
     <div id="ovBoard">
       <div id="ovStats" class="ov-grid"></div>
       <div class="ov-details">
-        <section class="ov-card"><h3>元件上报覆盖</h3><div id="ovCoverage" class="ov-ring"><strong></strong></div><dl id="ovBoardInfo" class="ov-list"></dl></section>
-        <section class="ov-card"><div class="ov-head"><h3>元件状态</h3><select id="ovFilter" aria-label="筛选元件"><option value="all">全部元件</option><option value="reported">已上报</option><option value="issue">异常与超时</option></select></div><div id="ovParts" class="ov-parts"></div></section>
+        <section class="ov-card"><h3>清单里有多少部件报告了</h3><div id="ovCoverage" class="ov-ring"><strong></strong></div><dl id="ovBoardInfo" class="ov-list"></dl></section>
+        <section class="ov-card"><div class="ov-head"><h3>部件状态</h3><select id="ovFilter" aria-label="只看哪些部件"><option value="all">全部部件</option><option value="reported">有报告的</option><option value="issue">有问题的</option></select></div><div id="ovParts" class="ov-parts"></div></section>
       </div>
     </div>
     <div id="ovRuntime" hidden>
       <div id="ovRuntimeStats" class="ov-grid"></div>
       <div class="ov-details">
-        <section class="ov-card"><h3>板端读数</h3><dl id="ovRuntimeInfo" class="ov-list"></dl></section>
-        <section class="ov-card"><div class="ov-head"><h3>运行趋势</h3>
-          <select id="ovRuntimeMetric" aria-label="运行趋势测量项"><option value="io">通信速率 · B/s</option><option value="sram">可用 SRAM · KiB</option><option value="rssi">Wi-Fi 信号 · dBm</option></select>
-          </div><div id="ovRuntimeLegend" class="ov-legend"></div><canvas id="ovRuntimeTrend" role="img" aria-label="近期运行监控趋势"></canvas><p>按面板采样时间显示最近两分钟。</p></section>
+        <section class="ov-card"><h3>板子报告的数字</h3><dl id="ovRuntimeInfo" class="ov-list"></dl></section>
+        <section class="ov-card"><div class="ov-head"><h3>变化曲线</h3>
+          <select id="ovRuntimeMetric" aria-label="看哪条曲线"><option value="io">收发速度 · 字节/秒</option><option value="sram">剩余内存 SRAM · KiB</option><option value="rssi">Wi-Fi 信号 · dBm（越接近 0 越好）</option></select>
+          </div><div id="ovRuntimeLegend" class="ov-legend"></div><canvas id="ovRuntimeTrend" role="img" aria-label="最近两分钟的变化曲线"></canvas><p>显示最近两分钟。内存、信号需要配套的诊断固件才有。</p></section>
       </div>
     </div>
     <div id="ovPower" hidden>
       <div id="ovPowerCards" class="ov-grid"></div>
       <div class="ov-details">
         <section class="ov-card"><h3>电池状态</h3><div id="ovSoc" class="ov-ring"><strong></strong></div><dl id="ovBatteryInfo" class="ov-list"></dl></section>
-        <section class="ov-card"><div class="ov-head"><h3>运行曲线</h3><div class="ov-actions">
+        <section class="ov-card"><div class="ov-head"><h3>变化曲线</h3><div class="ov-actions">
           <select id="ovUnit" aria-label="曲线测量项"><option value="v">电压 V</option><option value="a">电流 A</option><option value="w">功率 W</option></select>
           <select id="ovSpan" aria-label="曲线时间范围"><option value="2">最近 2 分钟</option><option value="5">最近 5 分钟</option><option value="15">最近 15 分钟</option></select>
-          <a id="ovCsv" class="button">导出会话 CSV</a>
+          <a id="ovCsv" class="button">导出表格</a>
         </div></div><div id="ovLegend" class="ov-legend"></div><canvas id="ovTrend" role="img" aria-label="按电脑接收时间排列的电源趋势"></canvas><p id="ovTrendNote"></p></section>
       </div>
       <section id="ovCellsBox" class="ov-card"><div class="ov-head"><h3>单体电压分布 <small>V</small></h3><small id="ovCellDelta"></small></div><div id="ovCells" class="ov-cells"></div></section>
-      <details class="ov-format"><summary>能源设备如何上报数据</summary><p>通过已连接的串口、TCP 或 UDP，每行发送一个 JSON 快照。传感器或网关提供哪些读数，就填写哪些字段。以下为格式示例。</p>
+      <details class="ov-format"><summary>电源设备要怎么报告数据（给写固件的人看）</summary><p>电源页需要板子或网关每行输出一个 JSON，有哪些读数就填哪些字段。格式示例：</p>
         <pre>{"bb":1,"part":"power","status":"sample","value":{"battery_v":12.42,"battery_a":0.74,"pv_v":14.29,"load_w":0.6,"soc_pct":98,"cells_v":[4.14,4.14,4.14]}}</pre></details>
     </div>`;
   let live = null, mode = "board", connection = "", points = [], loaded = 0;
@@ -68,13 +68,13 @@ const renderOverview = (() => {
     boardKey = key;
     const seen = rows.filter(r => r.log_id);
     const errors = rows.filter(r => faults.has(r.status)), expired = rows.filter(r => r.status === "上报超时");
-    const stats = [["已上报元件", live ? seen.length : "—"], ["设备异常", connected ? errors.length : "—"], ["上报超时", connected ? expired.length : "—"]];
+    const stats = [["有报告的部件", live ? seen.length : "—"], ["报错的部件", connected ? errors.length : "—"], ["很久没报的", connected ? expired.length : "—"]];
     metrics("Stats", stats);
     const expected = rows.filter(r => r.expected);
     const reported = expected.filter(r => r.log_id).length;
     const pct = expected.length ? Math.round(100 * reported / expected.length) : null;
     ring("Coverage", pct, pct === null ? "—" : pct + "%");
-    list("BoardInfo", [["清单上报 / 适用项", expected.length ? reported + " / " + expected.length : "—"], ["检测配置", live?.profile || "—"],
+    list("BoardInfo", [["已报告 / 清单里的部件", expected.length ? reported + " / " + expected.length : "—"], ["板子型号", live?.profile || "—"],
       ["接收 / 发送", live ? live.rx.toLocaleString() + " / " + live.tx.toLocaleString() + " B" : "—"]]);
     const shown = rows.filter(r => filter === "all" || (filter === "reported" ? r.log_id : faults.has(r.status) || r.status === "上报超时"));
     const area = idx("Parts");
@@ -93,12 +93,12 @@ const renderOverview = (() => {
       }
       item.children[0].textContent = r.model ? r.name + " · " + r.model : r.name;
       item.disabled = !r.log_id;
-      item.children[1].textContent = r.status;
+      item.children[1].textContent = plainStatus(r.status);
       item.children[2].textContent = r.value || "—";
       item.children[1].className = "part-state";
       item.children[1].dataset.tone = faults.has(r.status) ? "fail" : r.status === "上报超时" ? "warn" : "neutral";
     }
-    if (!shown.length) area.append(el("p", live ? "当前筛选没有元件。" : "等待本地服务。"));
+    if (!shown.length) area.append(el("p", live ? "没有符合条件的部件。" : "正在启动…"));
   }
   function card(rail) {
     const box = el("section"); box.className = "ov-card";
@@ -162,13 +162,13 @@ const renderOverview = (() => {
   const runtime = createRuntimeMonitor();
   function drawRuntime() {
     const data = runtime.samples(), v = data.at(-1)?.values || {};
-    metrics("RuntimeStats", [["接收速率",measure(v.rx,"B/s",1)],["发送速率",measure(v.tx,"B/s",1)],["Wi-Fi 信号",measure(v.rssi,"dBm",0)]]);
+    metrics("RuntimeStats", [["收到的速度",measure(v.rx,"字节/秒",1)],["发出的速度",measure(v.tx,"字节/秒",1)],["Wi-Fi 信号",measure(v.rssi,"dBm",0)]]);
     const seconds = Number.isFinite(v.uptime) ? Math.floor(v.uptime/1000) : null;
-    list("RuntimeInfo",[["CPU 主频",measure(v.cpu,"MHz")],["板端运行时长",seconds===null ? "—" : Math.floor(seconds/3600)+" 时 "+Math.floor(seconds%3600/60)+" 分 "+seconds%60+" 秒"],
-      ["可用片内 SRAM",measure(v.sram,"KiB",1)],["可用 PSRAM",measure(v.psram,"KiB",1)],["PSRAM 总量",measure(v.totalPsram,"KiB",1)]]);
+    list("RuntimeInfo",[["芯片速度（主频）",measure(v.cpu,"MHz")],["板子开机多久了",seconds===null ? "—" : Math.floor(seconds/3600)+" 时 "+Math.floor(seconds%3600/60)+" 分 "+seconds%60+" 秒"],
+      ["剩余内存（SRAM）",measure(v.sram,"KiB",1)],["剩余扩展内存（PSRAM）",measure(v.psram,"KiB",1)],["扩展内存总量（PSRAM）",measure(v.totalPsram,"KiB",1)]]);
     const metric = idx("RuntimeMetric").value;
     const series = metric === "io" ? [{key:"rx",name:"接收",color:"battery"},{key:"tx",name:"发送",color:"load"}] :
-      [{key:metric,name:metric==="sram"?"可用片内 SRAM":"Wi-Fi RSSI",color:"battery"}];
+      [{key:metric,name:metric==="sram"?"剩余内存（SRAM）":"Wi-Fi 信号",color:"battery"}];
     idx("RuntimeLegend").replaceChildren(...series.map(s => {
       const n=el("span",s.name);n.className="ov-dot";n.style.setProperty("--series","var(--"+s.color+")");return n;
     }));
@@ -199,19 +199,19 @@ const renderOverview = (() => {
     }));
     graph(idx("Trend"),series,from,now,true,points,gapMs);
     const count = points.filter(p => p.time >= from && p.time <= now && series.some(s => Number.isFinite(p.values[s.key]))).length;
-    const note = readError ? "读取本地能源日志失败，正在重试。" : !live?.connected ? "等待设备连接。" :
-      !row ? "等待 power 遥测帧。可通过串口、TCP 或 UDP 上报。" : row.status !== "有读数" ? "能源遥测 · " + row.status :
-      !last || last.id < row.log_id ? "正在读取能源日志…" : "最近一帧 L" + last.id + " · " + fmtTime(last.time);
-    idx("TrendNote").textContent = note + (count ? "　窗口内 " + count + " 个有效采样点" : "　所选时段暂无此测量项。");
+    const note = readError ? "读取电源记录失败，正在重试。" : !live?.connected ? "等板子连上。" :
+      !row ? "还没收到电源数据（需要板子或网关按下面的格式报告）。" : row.status !== "有读数" ? "电源数据 · " + plainStatus(row.status) :
+      !last || last.id < row.log_id ? "正在读取电源记录…" : "最近一次 L" + last.id + " · " + fmtTime(last.time);
+    idx("TrendNote").textContent = note + (count ? "　这段时间有 " + count + " 个读数" : "　这段时间没有这一项的读数。");
     const cells = current?.cells || [], nums = cells.filter(Number.isFinite);
     const max = Math.max(0,...nums);
-    idx("CellDelta").textContent = cells.length ? cells.length+" 串 · 压差 "+(nums.length === cells.length ? measure((max-Math.min(...nums))*1000,"mV",1) : "待完整上报") : "";
+    idx("CellDelta").textContent = cells.length ? cells.length+" 节 · 最高和最低差 "+(nums.length === cells.length ? measure((max-Math.min(...nums))*1000,"mV",1) : "等报全") : "";
     idx("Cells").replaceChildren(...cells.map((cv,i) => {
       const n = el("div"); n.className="ov-cell";const bar=el("i");
       bar.style.height=(Number.isFinite(cv) && max ? cv/max*62 : 0)+"px";
       n.append(el("span",measure(cv,"",3)),bar,el("small","#"+(i+1)));return n;
     }));
-    if (!cells.length) idx("Cells").append(el("p","暂无单体电压读数。"));
+    if (!cells.length) idx("Cells").append(el("p","还没有每节电池的电压。"));
   }
   async function loadPower(row) {
     if (!row?.log_id || row.log_id <= loaded || pending) return;
@@ -228,8 +228,8 @@ const renderOverview = (() => {
   }
   function draw() {
     if (panel.hidden) return;
-    const label = !live ? "本地服务离线" : live.connected ? live.transport+" 已连接" : "设备未连接";
-    idx("Status").textContent = live ? "会话 #"+live.run+" · "+label : label;
+    const label = !live ? "软件后台没响应" : live.connected ? "已连上板子" : "还没连上板子";
+    idx("Status").textContent = live ? "记录 #"+live.run+" · "+label : label;
     if (mode==="board") board();
     else if (mode==="runtime") drawRuntime();
     else {power(); if (live?.connected) loadPower(live.components.find(r=>r.part==="power"));}

@@ -6,9 +6,10 @@ const replayPanel = (() => {
   const PAGE = 250;
   const KEEP_CHECKPOINTS = 12;
   panel.innerHTML = `
-    <div class="section-title"><i class="ico clock-counter-clockwise" aria-hidden="true"></i><h2>会话回放</h2></div>
-    <div class="rp-toolbar"><label>本地会话<select id="rpRun"></select></label>
-      <button id="rpReload">刷新记录</button><button id="rpVcd">导出按键波形</button></div>
+    <div class="section-title"><i class="ico clock-counter-clockwise" aria-hidden="true"></i><h2>回看记录</h2></div>
+    <p class="explain"><b>这是什么：</b>像看录像一样，按时间顺序重放以前某次记录里板子说过的话，方便找出问题是什么时候、在哪一步出现的。只读电脑上存的记录，不碰板子。</p>
+    <div class="rp-toolbar"><label>哪次记录<select id="rpRun"></select></label>
+      <button id="rpReload">载入最新内容</button><button id="rpVcd" title="生成 VCD 文件，可以用 GTKWave 打开看按键的高低电平">导出按键波形</button></div>
     <p id="rpNotice" role="status"></p>
     <div id="rpPlayer" hidden>
       <div class="rp-player">
@@ -22,7 +23,7 @@ const replayPanel = (() => {
             <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
           </select></label>
           <button id="rpPrevEvent">上一条</button><button id="rpNextEvent">下一条</button>
-          <button id="rpNextIssue" aria-controls="rpIssue">下一处异常</button>
+          <button id="rpNextIssue" aria-controls="rpIssue">跳到下一个问题</button>
         </div>
       </div>
       <div class="rp-paging"><span id="rpSegment"></span><div>
@@ -30,24 +31,24 @@ const replayPanel = (() => {
       </div></div>
       <section class="rp-search" aria-label="查找整场日志">
         <form id="rpSearchForm" class="rp-toolbar" role="search">
-          <label>查找整场日志<input id="rpQuery" type="search" maxlength="160" placeholder="日志内容、来源、等级或 L 编号"></label>
+          <label>在整次记录里找<input id="rpQuery" type="search" maxlength="160" placeholder="要找的文字，或记录编号如 L21"></label>
           <button id="rpFind" type="submit">查找</button>
           <button id="rpFindPrev" type="button" hidden>上一处</button>
         </form>
         <p id="rpSearchStatus" role="status" hidden></p>
         <div id="rpMatches" hidden></div>
         <div class="rp-controls-search">
-          <button id="rpPin" hidden>设为计时起点</button>
+          <button id="rpPin" hidden title="再找另一条，就能看到两条之间隔了多少毫秒">从这条开始计时</button>
           <span id="rpDelta" hidden></span><button id="rpUnpin" hidden>清除起点</button>
         </div>
       </section>
       <section id="rpIssue" class="rp-issue" hidden>
-        <div class="rp-issue-head"><div><h3 id="rpIssueTitle">异常上下文</h3>
+        <div class="rp-issue-head"><div><h3 id="rpIssueTitle">问题前后发生了什么</h3>
           <p id="rpIssueNote" role="status"></p></div><button id="rpIssueClose">收起</button></div>
         <div id="rpIssueRows"></div>
       </section>
-      <div class="rp-columns"><section><h3>元件最后上报</h3><div id="rpParts"></div></section>
-        <section><h3>光标前的事件</h3><div id="rpLog"></div></section></div>
+      <div class="rp-columns"><section><h3>当时各部件的状态</h3><div id="rpParts"></div></section>
+        <section><h3>到这一刻为止的记录</h3><div id="rpLog"></div></section></div>
     </div>`;
   const node = (id) => panel.querySelector("#rp" + id);
   const clock = new Intl.DateTimeFormat("zh-CN", {
@@ -245,7 +246,7 @@ const replayPanel = (() => {
               "p",
               snapshot.disconnected
                 ? "该时刻连接已断开。"
-                : "此时还没有元件上报。",
+                : "这时还没有部件报告。",
             ),
           ]),
     );
@@ -346,7 +347,7 @@ const replayPanel = (() => {
       more = data.more;
       if (!events.length) {
         node("Player").hidden = true;
-        node("Notice").textContent = "这段会话尚无事件。";
+        node("Notice").textContent = "这次记录是空的。";
         return;
       }
       let previous = checkpoint.start ?? Date.parse(events[0].at);
@@ -365,7 +366,7 @@ const replayPanel = (() => {
       }
       node("Player").hidden = false;
       node("Notice").textContent =
-        "按记录时间回放 · 蓝色为普通事件，黄色为告警，红色为错误";
+        "按时间重放 · 蓝色是普通记录，黄色是警告，红色是出错";
       node("Seek").max = points.at(-1) - segment.start;
       node("First").textContent = stamp(segment.start);
       node("Last").textContent = stamp(points.at(-1));
@@ -484,7 +485,7 @@ const replayPanel = (() => {
       if (!preferred) {
         reset();
         selected = "";
-        node("Notice").textContent = "还没有可回放的会话。";
+        node("Notice").textContent = "还没有能回看的记录。";
         return;
       }
       node("Run").value = preferred.id;
@@ -493,7 +494,7 @@ const replayPanel = (() => {
       selectRun(preferred.id, String(preferred.id) === String(id) ? ref : null);
     } catch (e) {
       if (seq === visits && !panel.hidden)
-        node("Notice").textContent = "无法读取会话 · " + e.message;
+        node("Notice").textContent = "读不到这次记录 · " + e.message;
     }
   }
   function selectRun(id, ref = null) {

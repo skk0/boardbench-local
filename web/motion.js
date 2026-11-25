@@ -64,10 +64,10 @@ function motionAngles(gravity, zero) {
 }
 
 function motionReading(state, now = Date.now()) {
-  if (!state) return { reason: "连接本地服务后查看姿态" };
-  if (!state.connected) return { reason: "连接设备后查看姿态" };
+  if (!state) return { reason: "软件后台没响应" };
+  if (!state.connected) return { reason: "连上板子后能看到它的倾斜角度" };
   const row = state.components.find((item) => item.part === "imu");
-  if (!row || !row.log_id) return { reason: "等待固件上报六轴读数" };
+  if (!row || !row.log_id) return { reason: "等固件报告六轴传感器的读数" };
   if (row.status !== "有读数") return { reason: "六轴传感器 · " + row.status };
   const at = Date.parse(row.at);
   const age = now - at;
@@ -205,10 +205,10 @@ function renderMotionSampling(host, session, reading, run) {
   save.disabled =
     session?.run !== run || Boolean(session?.saving || session?.saved);
   save.textContent = session?.saved
-    ? "已存入会话日志"
+    ? "已记到记录里"
     : session?.saving
       ? "正在保存…"
-      : "存入会话日志";
+      : "记到记录里";
   if (session?.status !== "complete") {
     result.hidden = true;
     return;
@@ -254,7 +254,7 @@ const motionView = (() => {
       host = document.getElementById("motionView");
       if (!host) return;
       host.innerHTML = `
-        <div class="motion-top"><h2>板子水平仪</h2><span class="motion-status" role="status"></span></div>
+        <div class="motion-top"><h2>板子水平仪（需要六轴传感器）</h2><span class="motion-status" role="status"></span></div>
         <div class="motion-instrument">
           <div class="motion-dial" aria-hidden="true">
             <span class="motion-ring"></span><span class="motion-bubble" hidden></span>
@@ -266,10 +266,10 @@ const motionView = (() => {
             <div class="motion-source"></div>
           </dl>
         </div>
-        <div class="motion-actions"><button type="button">以当前姿态置零</button><button type="button">恢复默认零点</button></div>
+        <div class="motion-actions"><button type="button">把现在的角度当作水平</button><button type="button">恢复默认的水平</button></div>
         <p class="motion-help"></p>
-        <div class="motion-sampling"><div class="motion-actions"><strong>静置采样</strong><button type="button" class="motion-collect">采集 5 组</button></div>
-          <p class="motion-sampling-note" role="status"></p><dl class="motion-sampling-result" hidden></dl><button type="button" class="motion-save" hidden>存入会话日志</button></div>`;
+        <div class="motion-sampling"><div class="motion-actions"><strong>放稳了测一下</strong><button type="button" class="motion-collect">测 5 组读数</button></div>
+          <p class="motion-sampling-note" role="status"></p><dl class="motion-sampling-result" hidden></dl><button type="button" class="motion-save" hidden>记到记录里</button></div>`;
       const [capture, reset] = host.querySelectorAll("button");
       capture.onclick = () => {
         const next = motionReading(current);

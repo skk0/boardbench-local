@@ -1,4 +1,30 @@
 "use strict";
+const plainStatusText = {
+  "固件声明未安装": "固件说没装",
+  "未提供读数": "固件没给读数",
+  "控制状态": "只知道开关",
+  "固件日志": "有输出",
+  "固件报错": "板子报错",
+  "未上报": "没报告",
+  "等待设备": "等板子",
+  "上报超时": "很久没报",
+  "未启用": "没启用",
+};
+const statusHelp = {
+  "有读数": "板子报了这个部件的读数，说明它在工作。",
+  "有应答": "板子能和这个部件通信。",
+  "设备报错": "板子说这个部件出错了，点部件名看原文。",
+  "无应答": "板子找不到这个部件（没接好、没装或坏了）。",
+  "固件声明未安装": "固件明确说这块板子没装这个部件，不算故障。",
+  "未提供读数": "固件没有这个部件的驱动或读数。",
+  "控制状态": "只知道控制引脚是开是关，不能说明部件本身好坏。",
+  "固件日志": "板子的日志里提到了这个部件，但没有明确说好坏。",
+  "固件报错": "板子的日志里这个部件报了错。",
+  "上报超时": "这个部件很久没报告了，可能卡住或断开。",
+  "连接断开": "板子已经断开，显示的是断开前最后的状态。",
+  "未上报": "固件还没说过这个部件，不代表坏了。",
+};
+const plainStatus = (s) => plainStatusText[s] || s;
 let selectedPart = "",
   partLogs = [],
   partStamp = "",
@@ -28,7 +54,7 @@ async function loadPart(part, force = false) {
   partStamp = key;
   partLogs = rows.reverse().map((r) => ({ ...r, source: row.name }));
   $("partScope").hidden = false;
-  $("partName").textContent = row.name + " · 最近 200 条";
+  $("partName").textContent = row.name + " · 最近 200 条记录";
   logKey = "";
   logs();
 }
@@ -47,7 +73,7 @@ function renderComponents() {
   if (identityBox.dataset.key !== identityKey) {
     identityBox.dataset.key = identityKey;
     identityBox.replaceChildren();
-    for (const [key, label] of [["board", "固件板型"], ["chip", "芯片"], ["firmware", "固件"], ["version", "固件版本"]]) {
+    for (const [key, label] of [["board", "板子自报型号"], ["chip", "芯片"], ["firmware", "固件"], ["version", "固件版本"]]) {
       const entry = identity[key];
       if (!entry) continue;
       const run = state.run;
@@ -63,12 +89,12 @@ function renderComponents() {
   const seen = records.filter((x) => x.log_id).length;
   $("emptyParts").hidden = records.length > 0 && (!$("onlyReported").checked || seen > 0);
   $("monitorInfo").textContent =
-    state.profile + " · " + seen + " 个元件有上报";
+    state.profile + " · " + seen + " 个部件有报告";
   $("monitorHelp").hidden = !(state.connected && seen);
-  $("monitorHelp").textContent = "点元件名称可查看该元件的日志。";
+  $("monitorHelp").textContent = "点部件名能看它的记录。";
   $("emptyParts").textContent = state.connected
-    ? "正在监听，等待读取元件上报。"
-    : "连接设备后，这里会显示元件状态和最近读数。";
+    ? "已连上，正在等板子报告部件状态。"
+    : "连上板子后，这里会显示各个部件的状态和最新读数。";
   for (const r of records) {
     let node = componentNodes.get(r.part);
     if (!node) {
@@ -81,7 +107,7 @@ function renderComponents() {
           logKey = "";
           logs(true);
           $("partScope").hidden = false;
-          $("partName").textContent = r.name + " · 正在读取";
+          $("partName").textContent = r.name + " · 正在读取…";
           await loadPart(r.part, true);
           if (selectedPart !== r.part) return;
           renderComponents();
@@ -103,7 +129,8 @@ function renderComponents() {
     node.tr.hidden = $("onlyReported").checked && !r.log_id;
     node.tr.classList.toggle("selected", r.part === selectedPart);
     node.b.setAttribute("aria-pressed", String(r.part === selectedPart));
-    node.pill.textContent = r.status;
+    node.pill.textContent = plainStatus(r.status);
+    node.pill.title = statusHelp[r.status] || "";
     node.pill.className = "part-state";
     node.pill.dataset.tone = ["设备报错", "固件报错", "无应答"].includes(
       r.status,

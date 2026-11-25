@@ -22,11 +22,11 @@ class Endurance:
 
     def start(self, bench, variant, minutes):
         if self.active or not bench.ser:
-            raise ValueError("请连接设备，且同一时间只运行一轮长测。")
+            raise ValueError("请先连上板子；同一时间只能做一轮稳定性测试。")
         if not isinstance(variant, str) or not 1 <= len(variant.strip()) <= 80:
-            raise ValueError("请输入板型与选装配置，例如 BOX 一代 / 无摄像头。")
+            raise ValueError("请写一下板子型号和配件，例如 BOX 一代 / 无摄像头。")
         if type(minutes) is not int or not 1 <= minutes <= 10080:
-            raise ValueError("时长应为 1–10080 分钟。")
+            raise ValueError("时长要在 1–10080 分钟之间（最长 7 天）。")
         stamp = now()
         row = self.db.execute(
             "INSERT INTO endurance(run,profile,variant,started,status,report) VALUES(?,?,?,?,?,?)",
@@ -141,7 +141,7 @@ class Endurance:
             "SELECT profile,variant,status FROM endurance WHERE id=?", (record,)
         ).fetchone()
         if not row or row[2] not in ("已到时", "手动结束"):
-            raise ValueError("请选正常结束的长测作为样板。")
+            raise ValueError("只能把正常结束的测试设成标准样板。")
         with self.db:
             self.db.execute(
                 "UPDATE endurance SET reference=0 WHERE profile=? AND variant=?",

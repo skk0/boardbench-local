@@ -18,21 +18,21 @@ IDF_REPORTS = {
     "wifi": (
         (
             r"wifi:\s*(?:state:\s*\w+\s*->\s*run\b|connected with .+, aid\s*=\s*\d+)",
-            "本次连接中，固件报告 Wi-Fi 已与接入点关联。互联网可达性尚未测量。",
+            "本次连接中，固件报告 Wi-Fi 已连上了路由器。还没测能不能上网。",
         ),
         (
             r"esp_netif_handlers:\s*sta ip:\s*",
-            "本次连接中，固件报告 Wi-Fi 站点已获得 IPv4 地址。互联网可达性尚未测量。",
+            "本次连接中，固件报告 Wi-Fi 站点已获得 IPv4 地址。还没测能不能上网。",
         ),
     ),
     "psram": (
         (
             r"(?:esp_psram|octal_psram):\s*Found [1-9]\d*\s*(?:KB|MB|KiB|MiB) PSRAM device\b",
-            "启动日志给出了已识别的 PSRAM 容量。内存读写仍需单独验证。",
+            "启动日志给出了已识别的 PSRAM 容量。内存能不能正常读写还要另外测。",
         ),
         (
             r"esp_psram:\s*Adding pool of [1-9]\d*K of PSRAM memory to heap allocator\b",
-            "固件报告已将 PSRAM 加入可分配内存池。内存读写仍需单独验证。",
+            "固件报告已将 PSRAM 加入可分配内存池。内存能不能正常读写还要另外测。",
         ),
     ),
     "mcu": (
@@ -82,15 +82,15 @@ def _verdict(bench, row):
     if state in ("等待设备", "连接断开"):
         return "unknown", "等待设备连接并输出本次检测的证据。"
     if state == "上报超时":
-        return "unknown", "周期上报已中断，等待新的板端读数。"
+        return "unknown", "周期上报已中断，等待新的板子读数。"
     if state == "固件声明未安装":
         return "absent", "固件声明此元件未安装。" + value
     if state in ("设备报错", "固件报错", "无应答"):
-        return "fault", f"本次收到板端报告 · {state}。{value}"
+        return "fault", f"本次收到板子报告 · {state}。{value}"
     if state in ("未上报", "未启用", "未提供读数"):
         return "unknown", state + (f" · {value}" if value else "。")
     if part in OBSERVATIONS:
-        return "observe", OBSERVATIONS[part] + (f" 板端记录 · {value}" if value else "")
+        return "observe", OBSERVATIONS[part] + (f" 板子记录 · {value}" if value else "")
     if state == "固件日志":
         detail = factory_detail(part, value)
         if detail:
@@ -104,13 +104,13 @@ def _verdict(bench, row):
         ):
             return (
                 "verified",
-                "本机串口收到了板端诊断心跳。USB OTG 功能另需对应固件和设备。",
+                "本机串口收到了板子诊断心跳。USB 当主机（OTG）的功能需要专门的固件和设备才能测。",
             )
         return "unknown", "当前证据尚未验证 USB 接口功能。"
     if state == "有应答":
         if part in {"buttons", "wifi", "ble"}:
             return "unknown", "收到应答，尚无按键动作或无线连接的实测记录。"
-        return "verified", "板端报告设备应答。此项验证总线通信。" + (
+        return "verified", "板子报告设备应答。此项验证总线通信。" + (
             f" {value}" if value else ""
         )
     if state == "控制状态":
@@ -118,7 +118,7 @@ def _verdict(bench, row):
             f" {value}" if value else ""
         )
     if state != "有读数":
-        return "unknown", "等待可判定的板端读数。"
+        return "unknown", "等待可判定的板子读数。"
     if part == "buttons":
         if not KEY_LEVELS.fullmatch(value):
             return "unknown", "按键上报未包含完整的 K0、K1、K2 电平。"
@@ -135,16 +135,16 @@ def _verdict(bench, row):
         if associated and -127 <= int(associated[1]) <= 0:
             return (
                 "verified",
-                "固件报告已关联接入点及信号强度。互联网可达性尚未测量。 " + value,
+                "固件报告已连上路由器，并给出了信号强度。还没测能不能上网。 " + value,
             )
-        return "unknown", "等待固件提供明确的接入点关联记录。"
+        return "unknown", "等待固件提供明确的“已连上路由器”记录。"
     if part == "ble":
         return "unknown", "等待蓝牙对端连接和数据收发的实测证据。"
     if not NUMBER.search(value) or re.search(
         r"\b(?:nan|inf|infinity|null|none)\b", value, re.I
     ):
         return "unknown", "上报未提供可用于验证的有效数值。"
-    return "verified", "已收到板端数值上报 · " + value
+    return "verified", "已收到板子数值上报 · " + value
 
 
 def evaluate(bench):
@@ -181,7 +181,7 @@ def evaluate(bench):
             if received and status not in ("fault", "absent"):
                 name = "串口接收"
                 status = "verified"
-                detail = "本次连接已通过串口收到数据。USB OTG 功能另需对应固件和设备。"
+                detail = "本次连接已通过串口收到数据。USB 当主机（OTG）的功能需要专门的固件和设备才能测。"
                 log_id = received
         rows.append(
             dict(

@@ -54,7 +54,7 @@ function createReplaySearch(node, recording, eventBlock, pause) {
       if (!result.event) {
         if (previous) atStart = true;
         else atEnd = true;
-        announce(!hit ? "本次会话没有匹配的日志。" : previous ? "已是第一处匹配。" : "已是最后一处匹配。");
+        announce(!hit ? "这次记录里没找到。" : previous ? "已是第一处匹配。" : "已是最后一处匹配。");
         return;
       }
       atStart = !hit && !previous;

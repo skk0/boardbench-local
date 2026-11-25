@@ -36,16 +36,17 @@ $("port").onchange = () => {
   buttons();
 };
 bind("knownUsb", () => {
-  const box = modal("已记住的 USB 设备");
+  const box = modal("记住的板子");
   const records = state.remembered_usb;
+  box.append(el("p", "连接过一次、而且有唯一序列号的板子会出现在这里。勾选“插上就自动连接”后，插上它就会自动连上。"));
   if (!records.length)
-    box.append(el("p", "首次连接有唯一序列号的串口后，可在这里命名。"));
+    box.append(el("p", "还没有记住的板子。"));
   for (const record of records) {
     const section = el("div");
     section.className = "hist";
     const [vid, pid, serial] = JSON.parse(record.identity);
     section.append(
-      el("strong", record.name || "未命名设备"),
+      el("strong", record.name || "还没起名"),
       el(
         "p",
         [vid, pid].map((n) => n.toString(16).padStart(4, "0")).join(":") +
@@ -57,11 +58,11 @@ bind("knownUsb", () => {
           record.framing,
       ),
     );
-    const name = field(section, "别名", el("input"));
+    const name = field(section, "起个好记的名字", el("input"));
     name.maxLength = 64;
     name.value = record.name;
     section.append(
-      button("保存别名", async () => {
+      button("保存名字", async () => {
         await act("usb-name", { identity: record.identity, name: name.value });
         $("knownUsb").click();
       }),
@@ -70,29 +71,29 @@ bind("knownUsb", () => {
   }
 });
 bind("cadence", () => {
-  const box = modal("元件上报设置");
+  const box = modal("多久没报算超时");
   const run = state.run;
-  box.append(el("p", "保存到检测配置 · " + state.profile));
+  box.append(el("p", "有的部件每隔几秒报一次，有的只在有事时才报。告诉软件它是哪种，就不会把“没事不报”误当成“很久没报”。按板子型号保存 · " + state.profile));
   if (!state.components.length) {
-    box.append(el("p", "等待设备首次上报元件。"));
+    box.append(el("p", "等板子先报告部件。"));
     return;
   }
   const part = field(
     box,
-    "元件",
+    "部件",
     pick(state.components.map((r) => [r.part, r.name])),
   );
   const mode = field(
     box,
-    "上报方式",
+    "这个部件怎么报告",
     pick([
-      ["auto", "默认"],
-      ["periodic", "周期上报"],
-      ["event", "事件触发"],
-      ["once", "一次性声明"],
+      ["auto", "默认（软件自己判断）"],
+      ["periodic", "定时报告"],
+      ["event", "有事才报"],
+      ["once", "只报一次"],
     ]),
   );
-  const interval = field(box, "预计周期（秒）", el("input"));
+  const interval = field(box, "大概多少秒报一次", el("input"));
   interval.type = "number";
   interval.min = 1;
   interval.max = 86400;
@@ -102,10 +103,10 @@ bind("cadence", () => {
     interval.parentElement.hidden = mode.value !== "periodic";
     note.textContent =
       mode.value === "periodic"
-        ? "连续三个周期未收到更新时提示超时。"
+        ? "超过 3 倍时间还没报，就标成“很久没报”。"
         : mode.value === "auto"
-          ? "采用内置元件的时限。"
-          : "保留最近的上报时间，不按静默时长判为超时。";
+          ? "用软件内置的时间。"
+          : "只记下最后一次报告的时间，不会因为没报而标成超时。";
   }
   part.onchange = () => {
     const r = state.components.find((r) => r.part === part.value);
@@ -117,7 +118,7 @@ bind("cadence", () => {
   part.onchange();
   box.append(
     button("保存设置", async () => {
-      if (run !== state.run) throw Error("会话已切换，请重新打开设置。");
+      if (run !== state.run) throw Error("记录已经换了，请重新打开这个设置。");
       await act("cadence", {
         part: part.value,
         mode: mode.value,
@@ -128,27 +129,27 @@ bind("cadence", () => {
   );
 });
 function previewProfile(data) {
-  if (!Array.isArray(data?.tests)) throw Error("请选择包含 tests 的测试配置。");
-  const box = modal("导入配置 · " + data.name);
+  if (!Array.isArray(data?.tests)) throw Error("这个文件不是检查清单（里面要有 tests）。");
+  const box = modal("导入检查清单 · " + data.name);
   const commands = data.tests.filter((t) => t.kind === "serial");
   if (commands.length) {
     const which = field(
       box,
-      "离线试跑项目",
+      "先用例子试一下哪一项",
       pick(commands.map((t, i) => [i, t.name])),
     );
     const mode = field(
       box,
-      "应答规则",
+      "怎么判断回答对不对",
       pick([
-        ["default", "沿用配置默认"],
-        ["line", "整行一致"],
-        ["frame", "完整 HEX 帧"],
-        ["contains", "包含标志"],
+        ["default", "按清单里写的"],
+        ["line", "整行完全一样"],
+        ["frame", "整段字节完全一样"],
+        ["contains", "包含这段文字就算对"],
       ]),
     );
-    const good = field(box, "成功样例", el("textarea")),
-      bad = field(box, "失败样例", el("textarea"));
+    const good = field(box, "正确回答的例子", el("textarea")),
+      bad = field(box, "错误回答的例子", el("textarea"));
     const result = el("p");
     result.setAttribute("role", "status");
     const current = () => commands[Number(which.value)];
@@ -174,40 +175,40 @@ function previewProfile(data) {
     }
     for (const node of [mode, good, bad]) node.oninput = storeExamples;
     box.append(
-      button("试跑样例", async () => {
+      button("用例子试一下", async () => {
         storeExamples();
         const { success_sample, failure_sample, ...test } = current();
         const run = (sample) =>
           postDiagnostic("/api/profile/sample", { test, sample });
         const first = await run(good.value);
-        const second = bad.value ? (await run(bad.value)).outcome : "未填写";
+        const second = bad.value ? (await run(bad.value)).outcome : "没填";
         result.textContent =
-          "成功样例：" + first.outcome + "　失败样例：" + second;
+          "正确的例子：" + first.outcome + "　错误的例子：" + second;
       }),
       result,
     );
   }
   box.append(
-    button("导入此配置", async () => {
+    button("导入", async () => {
       await act("import", { data });
       await setup();
       $("profile").value = data.name.trim();
       $("profile").onchange();
       $("dialog").close();
-      notice("配置已导入。");
+      notice("检查清单已导入。");
     }),
   );
 }
 function archiveTools(box) {
   const bar = el("div");
   bar.className = "row";
-  bar.append(button("长测记录与样板", showRecords));
+  bar.append(button("稳定性测试记录", showRecords));
   const file = el("input");
   file.type = "file";
   file.accept = ".json";
   file.hidden = true;
   async function load(f) {
-    if (!f || f.size > 524288) throw Error("请选择小于 512 KiB 的故障包。");
+    if (!f || f.size > 524288) throw Error("故障记录文件要小于 512 KB。");
     const { run } = await postDiagnostic(
       "/api/fault-pack/import",
       JSON.parse(await f.text()),
@@ -216,7 +217,7 @@ function archiveTools(box) {
     await openReplay(run);
   }
   file.onchange = handle(() => load(file.files[0]));
-  const drop = button("打开故障包（可拖入）", () => file.click());
+  const drop = button("打开别人发来的故障记录（可以拖进来）", () => file.click());
   drop.ondragover = (e) => e.preventDefault();
   drop.ondrop = (e) => {
     e.preventDefault();
@@ -232,19 +233,19 @@ async function previewPack(run) {
     el(
       "p",
       pack.events.length +
-        " 条日志。可在下方删去不便分享的内容，下载文件与预览一致。",
+        " 条记录。密码、IP 地址、邮箱等已经自动遮住；不想分享的内容可以在下面直接删掉，下载的文件和这里看到的一样。",
     ),
   );
-  const area = field(box, "故障包内容", el("textarea"));
+  const area = field(box, "要分享的内容", el("textarea"));
   area.rows = 13;
   area.value = JSON.stringify(pack, null, 2);
   box.append(
-    button("下载故障包", () => {
+    button("下载故障记录", () => {
       const data = JSON.parse(area.value);
       if (data.format !== pack.format || !Array.isArray(data.events))
-        throw Error("请保留故障包结构。");
+        throw Error("请别删掉文件的整体结构（format 和 events）。");
       const blob = new Blob([area.value], { type: "application/json" });
-      if (blob.size > 524288) throw Error("文件大于 512 KiB。");
+      if (blob.size > 524288) throw Error("文件超过 512 KB 了，请再删一些。");
       const a = el("a");
       a.download = "boardbench-fault-" + run + ".json";
       a.href = URL.createObjectURL(blob);
@@ -255,16 +256,16 @@ async function previewPack(run) {
 }
 
 bind("endurance", () => {
-  const box = modal("稳定性长测");
+  const box = modal("长时间稳定性测试");
   const active = state.endurance;
   if (active) {
     box.append(
       el(
         "p",
         active.variant +
-          " · 开始于 " +
+          " · 从 " +
           fmtTime(active.started) +
-          " · 计划 " +
+          " 开始 · 计划 " +
           active.minutes +
           " 分钟",
       ),
@@ -274,16 +275,17 @@ bind("endurance", () => {
       }),
     );
   } else {
-    const variant = field(box, "板型与选装配置", el("input"));
+    box.append(el("p", "让板子一直开着，软件记下这段时间里它重启了几次、哪个部件多久没报告。只听不发，不会改动板子。"));
+    const variant = field(box, "板子型号和配件（自己写，方便以后对比）", el("input"));
     variant.placeholder = "例如 BOX 一代 / 无摄像头";
     variant.maxLength = 80;
     variant.value = state.device_identity?.board?.value || "";
-    const minutes = field(box, "记录时长（分钟）", el("input"));
+    const minutes = field(box, "测多久（分钟）", el("input"));
     minutes.type = "number";
     minutes.min = 1;
     minutes.max = 10080;
     minutes.value = 30;
-    const start = button("开始只读长测", async () => {
+    const start = button("开始测试", async () => {
       await act("endurance-start", {
         variant: variant.value,
         minutes: Number(minutes.value),
@@ -295,19 +297,19 @@ bind("endurance", () => {
       el(
         "p",
         state.connected
-          ? "到时自动保存，断开连接时记录中断。"
-          : "请先连接待测设备。",
+          ? "到时间自动保存；中途断开会记下“中断”。"
+          : "请先连上板子。",
       ),
       start,
     );
   }
-  box.append(button("查看长测记录", showRecords));
+  box.append(button("看以前的测试记录", showRecords));
 });
 async function showRecords() {
   const rows = await get("/api/endurance");
-  const box = modal("长测记录与样板");
+  const box = modal("稳定性测试记录");
   if (!rows.length) {
-    box.append(el("p", "尚无记录，可从元件监视开始长测。"));
+    box.append(el("p", "还没有记录。在“板子状态”页点“长时间稳定性测试”开始。"));
     return;
   }
   for (const r of rows) {
@@ -316,7 +318,7 @@ async function showRecords() {
     item.append(
       el(
         "strong",
-        r.variant + " · " + r.status + (r.reference ? " · 样板" : ""),
+        r.variant + " · " + r.status + (r.reference ? " · 标准样板" : ""),
       ),
       el(
         "p",
@@ -342,13 +344,13 @@ async function showRecords() {
         ),
     );
     item.append(
-      button(ref ? "与同款样板对比" : "查看测量", () =>
+      button(ref ? "和标准样板比一比" : "看结果", () =>
         showMeasurement(r, ref),
       ),
     );
     if (!r.reference && ["已到时", "手动结束"].includes(r.status))
       item.append(
-        button("设为此配置的样板", async () => {
+        button("设成标准样板（以后拿来对比）", async () => {
           await act("endurance-reference", { record: r.id });
           await showRecords();
         }),
@@ -357,14 +359,14 @@ async function showRecords() {
   }
 }
 function showMeasurement(r, ref) {
-  const box = modal(r.variant + " · " + (ref ? "样板对比" : "长测结果"));
+  const box = modal(r.variant + " · " + (ref ? "和标准样板对比" : "测试结果"));
   const table = el("table");
   table.className = "diagnostic-measurements";
   const header = table.createTHead().insertRow();
   for (const title of [
     "项目",
-    "本次 #" + r.id,
-    ...(ref ? ["样板 #" + ref.id] : []),
+    "这次 #" + r.id,
+    ...(ref ? ["标准样板 #" + ref.id] : []),
   ]) {
     const th = el("th", title);
     th.scope = "col";
@@ -377,11 +379,11 @@ function showMeasurement(r, ref) {
     label.scope = "row";
     tr.append(label);
     if (ref && fn(r) !== fn(ref)) {
-      label.append(el("small", "差异"));
+      label.append(el("small", "不一样"));
     }
     for (const record of ref ? [r, ref] : [r]) {
       const cell = tr.insertCell();
-      cell.append(document.createTextNode(String(fn(record) ?? "未观测")));
+      cell.append(document.createTextNode(String(fn(record) ?? "没看到")));
       const log = evidence?.(record);
       if (log) {
         const link = button("L" + log, () =>
@@ -396,14 +398,14 @@ function showMeasurement(r, ref) {
     const part = record.components[id];
     return part
       ? [part.model, part.status].filter(Boolean).join(" · ")
-      : "未上报";
+      : "没报告";
   }
   metric("记录时长（秒）", (v) => v.seconds);
-  metric("接收日志（条）", (v) => v.rx_logs);
-  metric("观测到的 ROM 启动（次）", (v) => v.boots);
-  metric("最近 ROM 到主控首报（毫秒）", (v) => v.startup_ms);
+  metric("收到的记录（条）", (v) => v.rx_logs);
+  metric("板子重启了几次", (v) => v.boots);
+  metric("开机到第一次报告用了（毫秒）", (v) => v.startup_ms);
   for (const [key, label] of [
-    ["board", "固件板型"],
+    ["board", "板子自报型号"],
     ["chip", "芯片"],
     ["firmware", "固件"],
     ["version", "应用版本"],
@@ -424,7 +426,7 @@ function showMeasurement(r, ref) {
       (v) => v.components[part]?.log_id,
     );
     if (part in r.gaps || (ref && part in ref.gaps))
-      metric(part + " 最长静默（秒）", (v) => v.gaps[part]);
+      metric(part + " 最久多少秒没报告", (v) => v.gaps[part]);
   }
-  box.append(table, button("返回长测记录", showRecords));
+  box.append(table, button("返回", showRecords));
 }

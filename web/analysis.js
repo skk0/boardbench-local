@@ -66,7 +66,7 @@ async function loadRunResults() {
   const area = $("aiResults");
   area.replaceChildren();
   if (!records.length)
-    area.append(el("p", "该会话尚无分析。选好范围后可先查看证据。"));
+    area.append(el("p", "这次记录还没让 AI 分析过。"));
   records.forEach((rec) => {
     const article = el("article");
     article.className = "ai-record";
@@ -110,7 +110,7 @@ async function loadRunResults() {
   });
 }
 async function showEvidence(rec, ref) {
-  const box = modal("证据 " + ref + " · 会话 #" + rec.run);
+  const box = modal("原始记录 " + ref + " · 记录 #" + rec.run);
   if (ref.startsWith("L")) {
     const entry = await get("/api/ai/evidence/" + rec.run + "/" + ref.slice(1));
     if (!$("dialog").open || !box.isConnected) return;
@@ -135,7 +135,7 @@ async function showEvidence(rec, ref) {
 async function enterAnalysis(run) {
   if (!state) return;
   if (aiBusy) {
-    aiMessage("分析正在进行，完成后可以切换会话。");
+    aiMessage("AI 正在分析，完成后才能换记录。");
     return;
   }
   invalidatePreview();
@@ -166,7 +166,7 @@ async function enterAnalysis(run) {
   aiMessage(
     cfg.model
       ? "当前模型 · " + cfg.model
-      : "先配置 API 地址和模型。支持本地服务与兼容云接口。",
+      : "第一次用：先在下面“设置用哪个 AI”里填地址和模型（本机的 Ollama、LM Studio，或兼容 OpenAI 的云服务都行）。",
   );
   await loadRunResults();
 }
@@ -248,23 +248,23 @@ bind("aiPreview", () =>
       area = $("aiPayload");
     area.hidden = false;
     area.append(
-      el("h3", "待发送的诊断资料"),
+      el("h3", "要发给 AI 的内容"),
       el("p", cfg.base + " · " + cfg.model),
       el(
         "p",
-        "会话 #" +
+        "记录 #" +
           s.session +
           " · " +
           s.selected_events +
-          " 条诊断日志 · " +
+          " 条记录 · " +
           s.results.length +
-          " 项检测记录",
+          " 项检查结果",
       ),
     );
     if (!$("analysis").hidden) area.focus();
     if (!preview.ticket) {
-      area.append(el("p", "所选会话还没有诊断日志或检测记录。连接板子采集输出，或选择已有记录的测试会话。"));
-      area.append(button("查看元件监视", () => document.querySelector('[data-tab="monitor"]').click()));
+      area.append(el("p", "这次记录里还没有内容。先连上板子收一些输出，或者换一条以前的记录。"));
+      area.append(button("看板子状态", () => document.querySelector('.rail [data-tab="monitor"]').click()));
       aiMessage("暂无板卡诊断资料，本次未发送。");
       return;
     }
@@ -290,12 +290,12 @@ bind("aiPreview", () =>
           try {
             await loadRunResults();
           } catch {
-            aiMessage("报告 #" + report.id + " 已保存。重新打开 AI 分析可刷新列表。");
+            aiMessage("分析 #" + report.id + " 已保存。重新打开“AI 帮我看”能看到它。");
           }
         }),
       ),
     );
     area.querySelector("button").classList.add("primary");
-    aiMessage("预览已准备好。确认后，将这份快照发送至所选接口。");
+    aiMessage("下面就是要发给 AI 的全部内容。看过没问题，再点“发送并分析”。");
   }),
 );

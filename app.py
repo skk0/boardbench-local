@@ -10,6 +10,7 @@ import os
 import sys
 from pathlib import Path
 import secrets
+import urllib.parse
 import webbrowser
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--esp-worker"]:
@@ -31,6 +32,8 @@ import vcd_export
 from ai_analysis import Analysis
 from bench import Bench
 from echo import Echo
+import firmware
+from flasher import Flasher
 from monitor import AutoUSB
 from suite import Suite, make_plan
 
@@ -47,6 +50,7 @@ def make_app(directory, monitor_usb=True):
     token = secrets.token_urlsafe(24)
     lock = asyncio.Lock()
     auto = AutoUSB(bench, lock)
+    flash = Flasher(bench)
     faultpack.install(bench.db)
 
     @web.middleware
@@ -299,6 +303,27 @@ def make_app(directory, monitor_usb=True):
         await response.write_eof()
         return response
 
+    @routes.get("/api/flash")
+    async def flash_state(req):
+        return web.json_response(flash.state())
+
+    @routes.post("/api/flash/open")
+    async def flash_open(req):
+        if req.content_type == "application/json":
+            path = (await req.json()).get("path", "")
+            if not isinstance(path, str) or not path.strip():
+                raise ValueError("请选择固件文件或文件夹。")
+            args = dict(path=path.strip())
+        else:
+            data = await req.clone(client_max_size=firmware.MAX_ZIP_TOTAL).read()
+            name = urllib.parse.unquote(req.headers.get("X-File-Name", "firmware.bin"))[:200]
+            args = dict(name=name, data=data)
+        async with lock:
+            fw = await asyncio.to_thread(firmware.load, args["path"]) if "path" in args else \
+                await asyncio.to_thread(firmware.load_bytes, args["name"], args["data"])
+            flash.open(loaded=fw)
+        return web.json_response(flash.state())
+
     @routes.get("/api/endurance")
     async def endurance_history(req):
         return web.json_response(bench.endurance.history())
@@ -325,10 +350,10 @@ def make_app(directory, monitor_usb=True):
         op = req.match_info["op"]
         async with lock:
             if d.get("run") != bench.run:
-                raise ValueError("测试会话已更新，请刷新页面。")
+                raise ValueError("记录已经换了一条，请刷新页面再试。")
             if op == "new":
                 if echo.runner:
-                    raise ValueError("请先停止局域网回声。")
+                    raise ValueError("请先结束语音回声测试。")
                 await bench.select_profile(d["profile"])
             elif op == "import":
                 bench.add_profile(d["data"])
@@ -347,7 +372,7 @@ def make_app(directory, monitor_usb=True):
             elif op == "connect":
                 if bench.usb and not bench.ser and not bench.job:
                     if echo.runner:
-                        raise ValueError("请先结束当前回声会话再换设备。")
+                        raise ValueError("请先结束语音回声测试再换板子。")
                     await bench.select_profile(bench.profile if bench.usb == d["port"] else "通用串口设备")
                 bench.connect(d["port"], int(d["baud"]), d.get("framing", "8N1"))
                 auto.remember(d["port"], int(d["baud"]), d.get("framing", "8N1"))
@@ -362,13 +387,27 @@ def make_app(directory, monitor_usb=True):
                 port = d["port"]
                 bench.select(port)
                 bench.start("Flash 完整备份", lambda: bench.backup(port))
+            elif op == "flash-inspect":
+                bench.select(d["port"])
+                bench.start("刷固件 · 识别和检查", lambda: flash.inspect(d["port"]))
+            elif op == "flash-factory":
+                flash.set_factory(d["value"] is True)
+            elif op == "flash-start":
+                bench.select(d["port"])
+                bench.start("刷固件 · 备份和刷写", lambda: flash.flash(
+                    d["port"], d.get("confirm_board") is True, d.get("full_backup") is True))
+            elif op == "flash-restore":
+                bench.select(d["port"])
+                bench.start("刷固件 · 恢复备份", lambda: flash.restore(d["port"], d["backup"]))
+            elif op == "flash-close":
+                flash.close()
             elif op == "probe":
                 port = d["port"]
                 bench.select(port)
                 bench.start("ESP ROM 探测", lambda: bench.probe(port))
             elif op == "send":
                 if bench.job:
-                    raise ValueError("检测执行中，稍后再发送。")
+                    raise ValueError("正在自动检查，稍后再发。")
                 if d.get("hex"):
                     data = bytes.fromhex(d["text"])
                 else:
@@ -385,7 +424,7 @@ def make_app(directory, monitor_usb=True):
                 profile = d.get("profile", bench.profile)
                 if profile != bench.profile:
                     if echo.runner:
-                        raise ValueError("切换板型前请先关闭当前回声测试。")
+                        raise ValueError("换板子型号前请先结束语音回声测试。")
                     await bench.select_profile(profile)
                 suite.start(d["mode"])
                 await asyncio.sleep(0)
@@ -399,13 +438,16 @@ def make_app(directory, monitor_usb=True):
                     and (d.get("name") == t["name"] or d.get("all") is True)
                 ]
                 if not items or not bench.ser:
-                    raise ValueError("需要已连接设备和可执行命令的测试配置。")
+                    raise ValueError("需要先连上板子，而且检查清单里有能发命令的项目。")
                 bench.start("设备应答测试", lambda: bench.cases(items))
             elif op == "stop":
-                await bench.stop()
+                if bench.taskname.startswith("刷固件"):
+                    flash.request_stop()
+                else:
+                    await bench.stop()
             elif op == "mark":
                 if suite.state() and suite.state()["status"] == "运行中":
-                    raise ValueError("整板检测进行中，请在当前组记录结果。")
+                    raise ValueError("人工检查正在进行，请在当前这一组里记结果。")
                 if not any(
                     t["name"] == d["name"] and t["kind"] == "manual"
                     for t in bench.tests
@@ -413,18 +455,18 @@ def make_app(directory, monitor_usb=True):
                     raise ValueError("只能人工判定查看或听音项目。")
                 detail = d.get("detail", "").strip()[:2000]
                 if not detail or d["state"] not in ("通过", "失败", "跳过"):
-                    raise ValueError("请填写实测现象或跳过原因。")
+                    raise ValueError("请写一下看到的情况或跳过的原因。")
                 bench.result(d["name"], d["state"], "人工记录 · " + detail)
             elif op == "note":
                 note = d["text"].strip()[:2000]
                 if not note:
-                    raise ValueError("备注为空。")
+                    raise ValueError("备注是空的。")
                 bench.log("NOTE", "操作员", note)
             elif op == "echo":
                 if d["enable"]:
                     port = int(d["port"])
                     if not 1024 <= port <= 65535:
-                        raise ValueError("请选择 1024–65535 端口。")
+                        raise ValueError("端口号请选 1024–65535。")
                     await echo.start(d["host"], port)
                 else:
                     await echo.stop()
