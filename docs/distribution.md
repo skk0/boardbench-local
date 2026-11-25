@@ -1,15 +1,15 @@
 # 安装与签名发布
 
-## 安装 v0.5.0
+## 安装
 
-从 [BoardBench v0.5.0 官方下载页](https://github.com/skk0/boardbench-local/releases/tag/v0.5.0) 下载对应系统的 ZIP 和同页的 `SHA256SUMS.txt`。此版本的 Mac 应用未经 Apple 公证，Windows EXE 未签名。校验值用于核对下载内容，发布者身份由代码签名验证。
+从 [BoardBench 最新发布页](https://github.com/skk0/boardbench-local/releases/latest) 下载对应系统的 ZIP 和同页的 `SHA256SUMS.txt`。除非发布说明另有注明，Mac 应用未经 Apple 公证，Windows EXE 未签名。校验值用于核对下载内容，发布者身份由代码签名验证。
 
 | 系统 | 在下载目录校验 ZIP | 首次启动 |
 |---|---|---|
 | Mac（Apple Silicon） | 终端运行 `shasum -a 256 BoardBench-macOS-arm64.zip` | 解压，将 BoardBench.app 拖入“应用程序”，双击打开。若仅提示开发者未经验证，确认下载来源可信且摘要一致后，在“系统设置 → 隐私与安全性”找到 BoardBench，点“仍要打开”并确认。 |
 | Windows（x64） | PowerShell 运行 `Get-FileHash .\BoardBench-Windows-x64.zip -Algorithm SHA256` | 解压并双击 BoardBench.exe。若仅提示 SmartScreen 无法识别该应用，确认来源和摘要后，可在系统提供该选项时点“更多信息 → 仍要运行”。窗口提示缺少 WebView2 时，安装微软的 Evergreen Runtime。 |
 
-将命令输出与清单中**相同文件名**一行的 64 位摘要逐位对照。摘要不同请重新下载。遇到恶意软件检测、文件损坏或公司设备策略拦截时，请停止启动并联系管理员。首次看到本地板卡测试台后，即可插入板子的 USB 数据线并选择串口。[Apple 首次打开说明](https://support.apple.com/zh-cn/102445) · [Microsoft SmartScreen 说明](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) · [WebView2 下载](https://developer.microsoft.com/microsoft-edge/webview2/)
+将命令输出与清单中**相同文件名**一行的 64 位摘要逐位对照。摘要不同请重新下载。遇到恶意软件检测、文件损坏或公司设备策略拦截时，请停止启动并联系管理员。首次看到本地板子测试台后，即可插入板子的 USB 数据线并选择串口。[Apple 首次打开说明](https://support.apple.com/zh-cn/102445) · [Microsoft SmartScreen 说明](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) · [WebView2 下载](https://developer.microsoft.com/microsoft-edge/webview2/)
 
 ## 维护者发布已签名版本
 
