@@ -411,11 +411,11 @@ class Flasher:
     @staticmethod
     def _write_manifest(folder, manifest):
         clean = {k: v for k, v in manifest.items() if not k.startswith("_")}
-        (folder / "manifest.json").write_text(json.dumps(clean, ensure_ascii=False, indent=2))
+        (folder / "manifest.json").write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
         sums = [f"{r['sha256']}  {r['file']}" for r in clean["regions"]]
         if clean.get("full"):
             sums.append(f"{clean['full']['sha256']}  {clean['full']['file']}")
-        (folder / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
+        (folder / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
 
     def _finish_manifest(self, backup):
         backup["complete"] = True
@@ -438,7 +438,7 @@ class Flasher:
         rows = []
         for path in sorted(self.root.glob("flash-*/manifest.json"), reverse=True)[:20]:
             with contextlib.suppress(OSError, ValueError):
-                m = json.loads(path.read_text())
+                m = json.loads(path.read_text(encoding="utf-8"))
                 rows.append(dict(id=m["id"], created=m["created"], reason=m["reason"], mac=m["mac"],
                                  complete=m.get("complete", False), before=m.get("before"), folder=str(path.parent),
                                  size=sum(r["size"] for r in m["regions"]), full=bool(m.get("full"))))
@@ -448,7 +448,7 @@ class Flasher:
         if not re.fullmatch(r"flash-[0-9a-z-]{1,40}", key or ""):
             raise ValueError("备份编号无效。")
         folder = self.root / key
-        manifest = json.loads((folder / "manifest.json").read_text())
+        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
         data = {}
         for r in manifest["regions"]:
             if not r["restore"]:

@@ -164,7 +164,8 @@ class BenchTests(unittest.IsolatedAsyncioTestCase):
             self.b.backups = Path(d)
             script = Path(d) / "fixture.py"
             script.write_text(
-                "import sys;from pathlib import Path;Path(sys.argv[-1]).write_bytes(b'firmware-fixture')"
+                "import sys;from pathlib import Path;Path(sys.argv[-1]).write_bytes(b'firmware-fixture')",
+                encoding="utf-8",
             )
             with patch.object(
                 self.b, "worker", return_value=[sys.executable, str(script)]

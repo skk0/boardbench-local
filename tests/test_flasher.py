@@ -114,7 +114,7 @@ class FlasherTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.f.result["state"], "ok")
         self.assertEqual(self.f.step, 7)
         folder = Path(self.f.done_backup["folder"])
-        manifest = json.loads((folder / "manifest.json").read_text())
+        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
         self.assertTrue(manifest["complete"])
         self.assertEqual(manifest["mac"], "f4:12:fa:00:00:01")
         self.assertEqual(manifest["before"]["version"], "1.0.0")
@@ -124,7 +124,7 @@ class FlasherTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(blob, before[r["offset"]:r["offset"] + r["size"]])
         nvs = next(r for r in manifest["regions"] if r["offset"] == 0x9000)
         self.assertFalse(nvs["restore"])
-        self.assertIn(nvs["sha256"], (folder / "SHA256SUMS.txt").read_text())
+        self.assertIn(nvs["sha256"], (folder / "SHA256SUMS.txt").read_text(encoding="utf-8"))
 
         # Settings change after flashing; restore brings back the old firmware but not old settings.
         self.flash[0x9000:0x9004] = b"NEW!"
@@ -139,7 +139,7 @@ class FlasherTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_backup_is_listed_in_history(self):
         await self.prepare()
         await self.f.flash("/dev/fake", full_backup=True)
-        manifest = json.loads((Path(self.f.done_backup["folder"]) / "manifest.json").read_text())
+        manifest = json.loads((Path(self.f.done_backup["folder"]) / "manifest.json").read_text(encoding="utf-8"))
         full = Path(self.f.done_backup["folder"]) / manifest["full"]["file"]
         self.assertEqual(full.stat().st_size, 4 * MB)
         self.assertEqual(self.f.backups()[0]["id"], manifest["id"])
@@ -217,7 +217,7 @@ class FlasherTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("反复重启", self.f.result["text"])
 
     def test_never_erases_chip_or_touches_efuses(self):
-        source = Path(flasher.__file__).read_text() + Path(fw.__file__).read_text()
+        source = Path(flasher.__file__).read_text(encoding="utf-8") + Path(fw.__file__).read_text(encoding="utf-8")
         code = re.sub(r'""".*?"""|#.*', "", source, flags=re.S)
         for forbidden in ("erase_flash", "erase_region", "espefuse", "burn_", "write_efuse", "erase_all"):
             self.assertNotIn(forbidden, code)

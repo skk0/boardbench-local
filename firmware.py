@@ -240,10 +240,10 @@ def from_dir(folder):
             return path.read_bytes()
 
         if (base / "flasher_args.json").is_file():
-            args = json.loads((base / "flasher_args.json").read_text())
+            args = json.loads((base / "flasher_args.json").read_text(encoding="utf-8"))
             return from_args(str(base), args.get("flash_files", {}), args.get("flash_settings", {}), args, read)
         if (base / "flash_args").is_file():
-            files, settings, extra = parse_flash_args((base / "flash_args").read_text())
+            files, settings, extra = parse_flash_args((base / "flash_args").read_text(encoding="utf-8"))
             return from_args(str(base), files, settings, extra, read)
     raise FirmwareError("这个文件夹里没找到编译结果（flasher_args.json 或 flash_args）。请选 ESP-IDF 工程的 build 文件夹。")
 

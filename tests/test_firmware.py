@@ -102,15 +102,15 @@ class DetectionTests(unittest.TestCase):
             (root / "build" / "bootloader").mkdir(parents=True)
             (root / "build" / "bootloader" / "bootloader.bin").write_bytes(image(app=False))
             (root / "build" / "app.bin").write_bytes(image())
-            (root / "build" / "flash_args").write_text("--flash-mode dio --flash-size 4MB\n0x0 bootloader/bootloader.bin\n0x20000 app.bin\n")
+            (root / "build" / "flash_args").write_text("--flash-mode dio --flash-size 4MB\n0x0 bootloader/bootloader.bin\n0x20000 app.bin\n", encoding="utf-8")
             loaded = fw.load(root)  # the project folder works too
             self.assertEqual(loaded["kind"], "build")
             self.assertEqual(loaded["settings"]["flash_size"], "4MB")
-            (root / "build" / "flasher_args.json").write_text(json.dumps({"flash_files": {"0x20000": "../../escape.bin"}}))
+            (root / "build" / "flasher_args.json").write_text(json.dumps({"flash_files": {"0x20000": "../../escape.bin"}}), encoding="utf-8")
             with self.assertRaisesRegex(fw.FirmwareError, "以外"):
                 fw.load(root / "build" / "flasher_args.json")
             (root / "build" / "flasher_args.json").write_text(json.dumps(
-                {"flash_files": {"0x20000": "app.bin"}, "app": {"file": "app.bin", "encrypted": "true"}}))
+                {"flash_files": {"0x20000": "app.bin"}, "app": {"file": "app.bin", "encrypted": "true"}}), encoding="utf-8")
             with self.assertRaisesRegex(fw.FirmwareError, "加密"):
                 fw.load(root / "build")
 
