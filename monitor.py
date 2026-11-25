@@ -8,6 +8,10 @@ import time
 from device_identity import identify
 from smart import key_cycles
 
+RESET_WINDOW = 5    # seconds after opening in which a vanished port or ROM banner means "we reset it"
+MAX_RESETS = 3      # drops right after opening before auto-connect gives up on a device
+STABLE_AFTER = 10   # seconds a connection must survive to clear earlier drops
+
 PARTS = {
     "mcu": "主控",
     "flash": "Flash",
@@ -133,7 +137,7 @@ class Components:
         if mode not in ("auto", "periodic", "event", "once"):
             raise ValueError("请选择上报方式。")
         if mode == "periodic" and (type(seconds) is not int or not 1 <= seconds <= 86400):
-            raise ValueError("上报周期应为 1–86400 秒。")
+            raise ValueError("时间要在 1–86400 秒之间。")
         if mode == "auto":
             self.db.execute("DELETE FROM cadence WHERE profile=? AND part=?", (self.profile, part))
         else:
@@ -252,7 +256,7 @@ class AutoUSB:
         self.ignored = set()
 
         self.task = None
-        self.message = "等待 USB 设备"
+        self.message = "等你插上板子"
         row = self.b.db.execute(
             "SELECT value FROM preferences WHERE key='usb_identity'"
         ).fetchone()
@@ -267,11 +271,14 @@ class AutoUSB:
         self.online = []
         self.next_try = {}
         self.current_key = None
+        self.resets = 0
+        self.gave_up = None
 
     def enable(self, value):
         self.enabled = bool(value)
         self.ignored.clear()
         self.next_try.clear()
+        self.resets, self.gave_up = 0, None
         self.b.db.execute(
             "INSERT OR REPLACE INTO preferences VALUES('auto_usb',?)",
             ("1" if value else "0",),
@@ -296,6 +303,7 @@ class AutoUSB:
         current = next((p for p in devices if p["path"] == path), {})
         ident = self.identity(current)
         self.current_key = None
+        self.resets, self.gave_up = 0, None
         if ident and sum(self.identity(p) == ident for p in devices) == 1:
             self.current_key = json.dumps(ident)
             self.db.execute("""INSERT INTO remembered_usb VALUES(?,?,?,?) ON CONFLICT(identity)
@@ -314,10 +322,34 @@ class AutoUSB:
 
     def rename(self, identity, name):
         if not isinstance(name, str) or len(name.strip()) > 64:
-            raise ValueError("设备别名最多 64 字。")
+            raise ValueError("名字最多 64 个字。")
         if not self.db.execute("UPDATE remembered_usb SET name=? WHERE identity=?", (name.strip(), identity)).rowcount:
-            raise ValueError("请先连接具有唯一标识的设备。")
+            raise ValueError("这块板子没有唯一的序列号，不能记住。")
         self.db.commit()
+
+    def note_drop(self):
+        """Count a port that vanished right after we opened it: opening it reset the board."""
+        lost, self.b.lost = self.b.lost, None
+        if self.b.ser and time.monotonic() - self.b.opened_at > STABLE_AFTER:
+            self.resets = 0
+        if not lost or lost["after"] >= STABLE_AFTER:
+            if lost:
+                self.resets = 0
+            return
+        if lost["after"] >= RESET_WINDOW and not lost["rom"]:
+            return
+        self.resets += 1
+        if self.resets >= MAX_RESETS:
+            self.gave_up = self.current_key
+            self.message = ("板子每次连上都会自己重启，已停止自动连接，免得它一直重启。"
+                            "可以点“连接”手动再试；还不行就换到板子上标着 UART 的 USB 口。")
+            self.b.log("WARN", "USB", self.message)
+            return
+        wait = 1.5 * 2 ** self.resets
+        self.next_try[lost["port"]] = time.monotonic() + wait
+        self.message = f"板子刚连上就断开了（多半是重启了），{wait:.0f} 秒后再连"
+        self.b.log("WARN", "USB", f"{lost['port']} 打开 {lost['after']:.1f} 秒后断开，"
+                   f"可能是打开串口时板子重启了。等 {wait:.0f} 秒再连，第 {self.resets} 次。")
 
     async def check(self):
         ports = await asyncio.to_thread(self.b.ports)
@@ -325,6 +357,7 @@ class AutoUSB:
         paths = {p["path"] for p in ports}
         self.ignored.intersection_update(paths)
         async with self.lock:
+            self.note_drop()
             if not self.enabled or self.b.ser or self.b.job:
                 return
             if self.b.storage_hold:
@@ -334,27 +367,31 @@ class AutoUSB:
             matches = [(p, saved[ident]) for p in ports
                        if (ident := json.dumps(self.identity(p))) in saved]
             if len(matches) != 1:
-                self.message = ("有多个匹配端口，请手动选择" if matches else
-                                "首次使用请选串口并点连接" if ports else "等待已记住的设备")
+                self.message = ("插着好几块记住的板子，请自己选一个连接" if matches else
+                                "第一次用：在上面选好板子的 USB 端口，点“连接”" if ports else "等你插上记住的板子")
                 return
             device, settings = matches[0]
             path = device["path"]
             if path in self.ignored:
-                self.message = "监视已手动断开"
+                self.message = "你手动断开了；拔插一次或点“连接”会再连上"
+                return
+            if self.gave_up == settings["identity"]:
                 return
             if time.monotonic() < self.next_try.get(path, 0):
                 return
             try:
-                profile = self.b.profile if self.current_key == settings["identity"] else "通用串口设备"
-                if self.b.usb or profile != self.b.profile:
+                same = self.current_key == settings["identity"]
+                profile = self.b.profile if same else "通用串口设备"
+                # The same board coming back (e.g. after a reset) keeps its session.
+                if (self.b.usb and not (same and self.b.usb == path)) or profile != self.b.profile:
                     await self.b.select_profile(profile)
                 self.b.connect(path, settings["baud"], settings["framing"])
                 self.current_key = settings["identity"]
-                self.message = "已自动连接 " + path
-                self.b.log("INFO", "USB", "已按 USB 标识重新连接，只监听板端输出。")
+                self.message = "已自动连上 " + path
+                self.b.log("INFO", "USB", "已按 USB 标识重新连接，只接收板子的输出。")
             except (ValueError, OSError) as exc:
                 self.next_try[path] = time.monotonic() + 15
-                self.message = "连接失败，15 秒后重试"
+                self.message = "没连上（" + str(exc)[:60] + "），15 秒后再试"
                 self.b.log("WARN", "USB", f"{path} · {exc}")
 
     async def watch(self):
@@ -362,5 +399,5 @@ class AutoUSB:
             try:
                 await self.check()
             except (OSError, ValueError) as exc:
-                self.message = "枚举失败 · " + str(exc)
+                self.message = "找 USB 端口时出错 · " + str(exc)
             await asyncio.sleep(1.5)

@@ -3,7 +3,9 @@
 import asyncio
 import codecs
 import contextlib
+import errno
 import json
+import os
 import re
 import shutil
 import hashlib
@@ -19,7 +21,7 @@ import socket
 import serial
 from serial.tools import list_ports
 from smart import evaluate
-from monitor import Components
+from monitor import Components, RESET_WINDOW
 from endurance import Endurance
 from replies import ReplyMatch
 from profiles import BUILTINS, validate
@@ -27,6 +29,34 @@ from profiles import BUILTINS, validate
 
 def stamp():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def open_without_reset(handle, windows=None):
+    """Open a configured pyserial port without ever pulsing the auto-reset lines.
+
+    ESP32 boards reset while DTR is off and RTS is on: the Espressif USB-Serial/JTAG
+    port (VID 0x303A) and the usual two-transistor circuit on UART bridges share that
+    truth table. macOS/Linux raise both lines when the port opens and pyserial then
+    writes DTR before RTS, so clearing both before open() passes through exactly that
+    reset state. Here POSIX goes (1,1) -> (1,0) -> (0,0); Windows applies both initial
+    states together through the DCB at open, starting from (0,0).
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if windows:
+        handle.dtr = handle.rts = False
+        handle.open()
+        return handle
+    handle.dtr = handle.rts = True
+    handle.open()
+    try:
+        handle.rts = False
+        handle.dtr = False
+    except OSError as exc:  # ptys and some adapters have no modem lines, like pyserial's own open()
+        if exc.errno not in (errno.EINVAL, errno.ENOTTY):
+            handle.close()
+            raise
+    return handle
 
 
 def valid_flash_probe(lines):
@@ -112,6 +142,9 @@ class Bench:
         self.network_host = ""
         self.network_port = 0
         self.rx = self.tx = 0
+        self.opened_at = 0.0
+        self.lost = None
+        self.reset_on_open = False
         self.endurance = Endurance(self.db)
         self.components = Components(self.db)
         previous = self.db.execute(
@@ -144,7 +177,7 @@ class Bench:
 
     async def select_profile(self, profile):
         if self.job or profile not in self.profiles():
-            raise ValueError("请先结束当前任务，并选择有效配置。")
+            raise ValueError("请先等当前任务做完（或点停止），再换板子型号。")
         previous = self.usb if self.ser else ""
         if self.reader:
             self.reader.cancel()
@@ -159,7 +192,7 @@ class Bench:
 
     def new(self, profile, keep_connection=False):
         if (self.ser and not keep_connection) or self.job:
-            raise ValueError("请先停止任务并断开设备，再开始新的测试。")
+            raise ValueError("请先停止当前任务、断开板子，再开新的记录。")
         if keep_connection and self.ser and self.current_rx_log_id:
             self.save_smart("切换检测配置")
         self.current_rx_log_id = None
@@ -203,6 +236,10 @@ class Bench:
             if reboot:
                 self.connection_id += 1
         self.db.commit()
+        if (level == "RX" and reboot and self.transport == "串口" and self.ser
+                and not self.reset_on_open and time.monotonic() - self.opened_at < RESET_WINDOW):
+            self.reset_on_open = True
+            self.log("WARN", "USB", "板子在刚连上时重启了一次（收到了开机信息）。不会因此反复重连。")
         return row.lastrowid
 
     def result(self, name, state, detail):
@@ -224,7 +261,7 @@ class Bench:
 
     def save_smart(self, reason):
         if not self.ser:
-            raise ValueError("请先连接设备，再保存智能检测结果。")
+            raise ValueError("请先连上板子，再保存体检结果。")
         self.check_space()
         at = stamp()
         rows = evaluate(self)
@@ -246,7 +283,7 @@ class Bench:
     def report(self, run, include_logs=True):
         rows = self.rows("SELECT * FROM runs WHERE id=?", (run,))
         if not rows:
-            raise ValueError("没有这次测试。")
+            raise ValueError("找不到这条记录。")
         info = rows[0]
         info["tests"] = json.loads(info["tests"])
         info["results"] = self.rows(
@@ -278,9 +315,9 @@ class Bench:
 
     def select(self, port):
         if port not in {p["path"] for p in self.ports()}:
-            raise ValueError("串口已离线，请刷新设备并检查 USB 数据线。")
+            raise ValueError("这个 USB 端口不见了：请检查数据线有没有插好，然后点“重新找端口”。")
         if self.usb and port != self.usb:
-            raise ValueError("换设备请先新建测试，避免混入上一块板的结果。")
+            raise ValueError("这次记录用的是另一块板子。换板子前请先断开，软件会新开一条记录，免得两块板子的结果混在一起。")
 
     def bind(self, port):
         self.usb = port
@@ -291,7 +328,7 @@ class Bench:
         if not self.db_path:
             return
         if shutil.disk_usage(self.db_path.parent).free < 1024**3:
-            raise ValueError("可用空间不足 1 GiB，已暂停采集。")
+            raise ValueError("电脑硬盘剩余空间不到 1 GB，已暂停记录。请清理一些空间。")
         size = sum(
             p.stat().st_size
             for p in (self.db_path, Path(str(self.db_path) + "-wal"))
@@ -305,13 +342,13 @@ class Bench:
 
     def connect(self, port, baud, framing="8N1"):
         if self.ser or self.job:
-            raise ValueError("串口或检测任务正在使用中。")
+            raise ValueError("已经连着板子，或者有任务正在进行。")
         self.check_space()
         self.select(port)
         if not 300 <= baud <= 4000000:
-            raise ValueError("波特率超出范围。")
+            raise ValueError("速度（波特率）要在 300–4000000 之间，不确定就填 115200。")
         if framing not in ("8N1", "8E1", "8O1", "8N2", "7E1", "7O1"):
-            raise ValueError("不支持此串口格式")
+            raise ValueError("不支持这个数据格式，一般选 8N1。")
         handle = serial.Serial(
             port=None,
             baudrate=baud,
@@ -321,9 +358,11 @@ class Bench:
             timeout=0,
             write_timeout=0.5,
         )
-        handle.dtr = handle.rts = False
         handle.port = port
-        handle.open()
+        open_without_reset(handle)
+        self.opened_at = time.monotonic()
+        self.lost = None
+        self.reset_on_open = False
         self.current_rx_log_id = None
         self.components.reset()
         self.ser = handle
@@ -340,10 +379,10 @@ class Bench:
         self.check_space()
         host = host.strip()
         if transport not in ("TCP", "UDP") or not host or not 1 <= port <= 65535:
-            raise ValueError("设备主机名与端口无效。")
+            raise ValueError("请填正确的板子地址和端口号（1–65535）。")
         address = f"{transport.lower()}://{host}:{port}"
         if self.ser or self.job or (self.usb and self.usb != address):
-            raise ValueError("请结束当前连接，换设备时先新建测试。")
+            raise ValueError("请先断开现在的连接；换板子时软件会新开一条记录。")
         self.current_rx_log_id = None
         self.components.reset()
         self.ser = await NetworkPort.connect(host, port, transport)
@@ -407,6 +446,9 @@ class Bench:
                     pending.clear()
                 await asyncio.sleep(0.025)
         except (OSError, serial.SerialException) as exc:
+            if self.transport == "串口":
+                self.lost = dict(port=self.usb, after=time.monotonic() - self.opened_at,
+                                 rom=self.reset_on_open)
             self.log("ERROR", self.transport, "读取中断 · " + str(exc))
             self.close_port()
         finally:
@@ -451,7 +493,7 @@ class Bench:
 
     def send(self, data):
         if not self.ser:
-            raise ValueError("请先连接设备。")
+            raise ValueError("请先连上板子。")
         if not 1 <= len(data) <= 8192:
             raise ValueError("每次发送限 1–8192 字节。")
         n = self.ser.write(data)
@@ -467,7 +509,7 @@ class Bench:
 
     def start(self, name, fn):
         if self.job:
-            raise ValueError("已有任务运行，可先停止。")
+            raise ValueError("已经有任务在做了，请等它做完或先点停止。")
 
         async def runner():
             try:
@@ -564,7 +606,7 @@ class Bench:
 
             code = await asyncio.wait_for(collect(), 1200)
             if code or not partial.exists() or not partial.stat().st_size:
-                raise ValueError("Flash 读取失败，查看 esptool 原始输出。")
+                raise ValueError("没读出闪存内容，请看右边记录里 esptool 的原始输出。")
 
             def checksum():
                 h = hashlib.sha256()
