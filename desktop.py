@@ -127,6 +127,12 @@ def run_window(port, make_service, smoke=False):
                             )
                             if not visible:
                                 raise RuntimeError("桌面窗口未显示智能检测")
+                            window.evaluate_js("document.querySelector('#screenDock > summary').click()")
+                            if not window.evaluate_js("document.querySelector('#screenDock[open] #screenForm').offsetWidth > 0"):
+                                raise RuntimeError("体检页未显示投屏连接表单")
+                            window.evaluate_js("document.querySelector('[data-tab=screen]').click()")
+                            if not window.evaluate_js("document.querySelector('#screenHome #screenForm').offsetWidth > 0"):
+                                raise RuntimeError("独立投影页未接回投屏表单")
                             window.evaluate_js("document.querySelector('[data-tab=signal]').click()")
                             if not window.evaluate_js("!!document.querySelector('#motionView .motion-dial')"):
                                 raise RuntimeError("桌面窗口未显示水平仪")

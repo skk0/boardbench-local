@@ -36,6 +36,9 @@
         <button data-tab="monitor" class="active" aria-current="page">
           <i aria-hidden="true" class="ico activity"></i>板子状态
         </button>
+        <button data-tab="hardware">
+          <i aria-hidden="true" class="ico cpu"></i>自动体检
+        </button>
         <button data-tab="screen"><i aria-hidden="true" class="ico squares-four"></i>屏幕投影</button>
         <button data-tab="flash">
           <i aria-hidden="true" class="ico arrows-down-up"></i>刷固件
@@ -50,9 +53,7 @@
       <details id="moreTools" class="rail-more">
         <summary class="rail-label">更多工具</summary>
         <nav aria-label="更多工具">
-          <button data-tab="hardware">
-            <i aria-hidden="true" class="ico cpu"></i>自动体检
-          </button>
+
           <button data-tab="overview">
             <i aria-hidden="true" class="ico squares-four"></i>总览图表
           </button>
@@ -167,10 +168,10 @@
           </div>
         </div>
         <div class="grid">
-          <section class="panel">
+          <section class="panel" id="testMainPanel">
             <section id="screen" class="tab" hidden>
               <div class="section-title"><i class="ico squares-four" aria-hidden="true"></i><h2>屏幕投影</h2></div>
-              <div class="screen-layout">
+              <div id="screenHome"><div class="screen-layout" id="screenLayout">
                 <figure class="screen-stage">
                   <div class="screen-glass"><img id="screenFrame" alt="板子当前的屏幕画面" hidden />
                     <span id="screenEmpty">等待第一帧画面</span></div>
@@ -184,6 +185,8 @@
                   <div class="row"><button type="submit" class="primary" id="screenStart">开始投影</button><button type="button" id="screenStop" disabled>停止</button></div>
                 </form>
               </div>
+              </div>
+              <button type="button" data-go="hardware" class="screen-jump">边投影边体检</button>
               <details class="screen-support"><summary>哪些板子和元件能用？</summary>
                 <dl>
                   <dt>屏幕画面</dt><dd>征辰 Wi-Fi、征辰 Wi-Fi＋ML307 的 r4 横屏固件支持局域网投影。ML307 版需切到 Wi-Fi。其他固件可实现相同的 JPEG 接口。只有串口日志的设备可在「板子状态」查看输出。</dd>
@@ -498,6 +501,11 @@
               </div>
             </section>
           </section>
+          <div id="testSide">
+            <details id="screenDock" hidden>
+              <summary><span>板子屏幕</span><small id="screenDockHint">展开连接</small></summary>
+              <div id="screenDockContent"></div>
+            </details>
           <section class="panel logpanel">
             <div class="loghead">
               <div>
@@ -537,6 +545,7 @@
               <span id="logCount"></span><a id="logCSV" title="表格文件，Excel 能打开">导出表格 ↓</a>
             </div>
           </section>
+          </div>
         </div>
       </div>
     </main>

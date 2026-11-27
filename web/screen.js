@@ -1,6 +1,9 @@
 "use strict";
 (() => {
-  const view = $("screen"), image = $("screenFrame");
+  const image = $("screenFrame"), dock = $("screenDock"), layout = $("screenLayout");
+  const testTabs = new Set(["monitor", "hardware", "terminal", "voice", "signal", "help"]);
+  const narrow = matchMedia("(max-width: 970px)");
+  let activeTab = "monitor";
   let controller = null, timer = 0, shown = "";
   function stop(message = "已停止") {
     controller?.abort();
@@ -13,6 +16,8 @@
     $("screenEmpty").hidden = false;
     $("screenMeta").textContent = "";
     $("screenStatus").textContent = message;
+    layout.classList.remove("receiving");
+    $("screenDockHint").textContent = dock.open ? "屏幕预览" : "展开连接";
     $("screenStart").disabled = false;
     $("screenStop").disabled = true;
     $("screenAddress").disabled = $("screenCode").disabled = false;
@@ -47,6 +52,8 @@
         image.src = shown;
         image.hidden = false;
         if (previous) URL.revokeObjectURL(previous);
+        layout.classList.add("receiving");
+        $("screenDockHint").textContent = address;
         $("screenEmpty").hidden = true;
         if ($("screenStatus").textContent !== "投影中") $("screenStatus").textContent = "投影中";
         $("screenMeta").textContent = probe.naturalWidth + " × " + probe.naturalHeight + " · " + new Date().toLocaleTimeString();
@@ -60,8 +67,29 @@
     next();
   };
   $("screenStop").onclick = () => stop();
-  new MutationObserver(() => { if (view.hidden && controller) stop(); })
-    .observe(view, {attributes:true, attributeFilter:["hidden"]});
+  function placeViewer() {
+    const inTest = testTabs.has(activeTab);
+    if (!inTest && activeTab !== "screen" && controller) stop();
+    const parent = narrow.matches ? $("testMainPanel") : $("testSide");
+    if (dock.parentElement !== parent) parent.prepend(dock);
+    dock.hidden = !inTest;
+    if (inTest && controller) dock.open = true;
+    const target = inTest ? $("screenDockContent") : $("screenHome");
+    if (layout.parentElement !== target) target.append(layout);
+  }
+  dock.addEventListener("toggle", () => {
+    if (!dock.open && !dock.hidden && controller) stop();
+    if (!controller) $("screenDockHint").textContent = dock.open ? "屏幕预览" : "展开连接";
+  });
+  document.addEventListener("boardbench:tab", event => {
+    const fromFullScreen = activeTab === "screen" && controller;
+    activeTab = event.detail;
+    placeViewer();
+    if (fromFullScreen && testTabs.has(activeTab))
+      $("testMainPanel").scrollIntoView({block:"start"});
+  });
+  narrow.addEventListener("change", placeViewer);
+  placeViewer();
   document.addEventListener("visibilitychange", () => { if (document.hidden && controller) stop(); });
   window.addEventListener("pagehide", () => stop());
 })();

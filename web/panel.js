@@ -623,6 +623,7 @@ for (const b of tabButtons)
     document
       .querySelectorAll(".tab")
       .forEach((n) => (n.hidden = n.id !== b.dataset.tab));
+    document.dispatchEvent(new CustomEvent("boardbench:tab", {detail:b.dataset.tab}));
     if (state) {
       renderCounts();
       plots();
