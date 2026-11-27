@@ -387,8 +387,8 @@ async function refresh() {
     setLogFollow(true);
   }
   $("badge").textContent = state.connected
-    ? "● 已连上板子"
-    : "○ 没连板子";
+    ? "● 监视端口已连接"
+    : "○ 监视端口未连接";
   $("run").textContent = "#" + state.run;
   renderCounts();
   $("bytes").textContent =

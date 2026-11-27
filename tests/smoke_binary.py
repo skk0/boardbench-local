@@ -46,6 +46,8 @@ with tempfile.TemporaryDirectory() as temp:
                     f"http://127.0.0.1:{port}/static/analysis.js", timeout=2
                 ) as r:
                     assert b"loadRunResults" in r.read()
+                with urlopen(f"http://127.0.0.1:{port}/static/screen.js", timeout=2) as r:
+                    assert b"/api/screen/frame" in r.read()
                 break
             except OSError:
                 time.sleep(0.3)
