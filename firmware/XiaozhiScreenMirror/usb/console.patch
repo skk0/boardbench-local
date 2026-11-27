@@ -1,0 +1,22 @@
+--- a/main/application.cc
++++ b/main/application.cc
+@@ -73,6 +73,8 @@
+     // Setup the display
+     auto display = board.GetDisplay();
+     display->SetupUI();
++    extern void StartUsbScreen();
++    StartUsbScreen();
+     // Print board name/version info
+     display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -1000,7 +1000,7 @@
+     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
+     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
+ )
+-list(APPEND SOURCES ${BOARD_SOURCES})
++list(APPEND SOURCES ${BOARD_SOURCES} "usb_screen.cc")
+ if(CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI OR CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI_LCD)
+     list(APPEND SOURCES "screen_mirror/desk_mirror.cc")
+     set_source_files_properties("screen_mirror/desk_mirror.cc" PROPERTIES COMPILE_DEFINITIONS BOARDBENCH_COMPACT_PAIRING)

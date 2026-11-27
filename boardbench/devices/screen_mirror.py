@@ -107,7 +107,7 @@ async def read_frame(url, code):
             return bytes(frame)
 
 
-def install(routes, capture_mcp=None):
+def install(routes, capture_mcp=None, capture_usb=None):
     gate = asyncio.Lock()
 
     @routes.post("/api/screen/frame")
@@ -116,6 +116,12 @@ def install(routes, capture_mcp=None):
             data = await req.json()
             if not isinstance(data, dict):
                 raise ValueError("投屏参数无效。")
+            if data.get("source") == "usb" and capture_usb:
+                if gate.locked():
+                    return web.json_response({"error": "正在读取上一帧。"}, status=429)
+                async with gate:
+                    pixels = await capture_usb(data.get("connection"))
+                return web.Response(body=pixels, content_type="image/jpeg")
             if data.get("source") == "mcp":
                 if capture_mcp is None:
                     raise ValueError("本地小智会话不可用。")

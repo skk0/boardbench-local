@@ -382,6 +382,7 @@ async function refresh() {
   appliedSequence = sequence;
   const changed = state?.run !== next.run;
   state = next;
+  document.dispatchEvent(new CustomEvent("boardbench:usb-screen", {detail:state}));
   if (changed) {
     $("profile").value = state.profile;
     setLogFollow(true);

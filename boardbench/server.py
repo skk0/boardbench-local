@@ -60,7 +60,7 @@ def make_app(directory, monitor_usb=True):
 
     app = web.Application(middlewares=[policy], client_max_size=256 * 1024)
     routes = web.RouteTableDef()
-    screen_mirror.install(routes, echo.capture_screen)
+    screen_mirror.install(routes, echo.capture_screen, lambda conn: bench.usb_screen.capture(bench, conn))
 
     @routes.get("/")
     async def index(req):
@@ -102,6 +102,7 @@ def make_app(directory, monitor_usb=True):
                 results=results,
                 connected=bool(bench.ser),
                 connection_id=bench.connection_id,
+                usb_screen=bench.usb_screen.state(bench.ser and bench.transport == "串口"),
                 transport=bench.transport,
                 port=bench.usb,
                 baud=bench.baud,

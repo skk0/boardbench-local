@@ -280,6 +280,7 @@ class AutoUSB:
         self.db.execute("DELETE FROM preferences WHERE key='usb_identity'")
         self.db.commit()
         self.online = []
+        self.previous_paths = None
         self.next_try = {}
         self.current_key = None
         self.resets = 0
@@ -366,6 +367,8 @@ class AutoUSB:
         ports = await asyncio.to_thread(self.b.ports)
         self.online = ports
         paths = {p["path"] for p in ports}
+        added = paths - self.previous_paths if self.previous_paths is not None else set()
+        self.previous_paths = paths
         self.ignored.intersection_update(paths)
         async with self.lock:
             self.note_drop()
@@ -377,6 +380,16 @@ class AutoUSB:
             saved = {r["identity"]: r for r in self.known()}
             matches = [(p, saved[ident]) for p in ports
                        if (ident := json.dumps(self.identity(p))) in saved]
+            # A unique, newly inserted USB serial interface can be listened to once.
+            # Already-present or ambiguous devices still require explicit selection.
+            if not matches and len(ports) == 1 and ports[0]["path"] in added:
+                device = ports[0]
+                identity = self.identity(device)
+                if identity and (device["vid"], device["pid"]) in {
+                    (0x303A, 0x1001), (0x10C4, 0xEA60), (0x1A86, 0x7523), (0x1A86, 0x55D4),
+                    (0x1A86, 0x55D3), (0x0403, 0x6001),
+                }:
+                    matches = [(device, dict(identity=json.dumps(identity), baud=115200, framing="8N1"))]
             if len(matches) != 1:
                 self.message = ("插着好几块记住的板子，请自己选一个连接" if matches else
                                 "第一次用：在上面选好板子的 USB 端口，点“连接”" if ports else "等你插上记住的板子")

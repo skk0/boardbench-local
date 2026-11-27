@@ -180,9 +180,11 @@
                 <form id="screenForm" class="screen-settings">
                   <h3>连接板子屏幕</h3>
                   <label>画面来源<select id="screenSource">
+                    <option value="usb" selected>USB 自动识别 · 保留官方云</option>
                     <option value="http">设备截图地址 · 局域网</option>
                     <option value="mcp">小智标准截图 · 本地会话</option>
                   </select></label>
+                  <p id="screenUsbHelp" role="status">等待 USB 板子报告截图能力。</p>
                   <p id="screenMcpHelp" hidden>在「语音回声」连接设备到本地 WebSocket 服务并完成握手，程序会查询固件的截图能力。切换服务前记下原 OTA 地址，测完可切回官方云。</p>
                   <button class="text-link" id="screenSetup" data-go="voice" type="button" hidden>去连接本地小智会话</button>
                   <p id="screenHttpHelp">在板上开启屏幕共享，再填写同一局域网内的设备地址。配套面包板固件双击 BOOT，屏上看配对码，串口日志看 IP。</p>
@@ -220,7 +222,7 @@
               </div>
               <div class="monitor-toolbar">
                 <div class="monitor-bar">
-                  <label class="checkline" title="插上记住的板子时自动连接，只接收不发送。"><input type="checkbox" id="autoUsb" />插上就自动连接</label>
+                  <label class="checkline" title="自动监听已记住的板子或唯一新插入的可识别 USB 串口。识别到 USB 截图能力后读取画面。"><input type="checkbox" id="autoUsb" />插上就自动连接</label>
                   <label class="checkline"><input type="checkbox" id="onlyReported" />只看有报告的部件</label>
                 </div>
                 <div class="monitor-actions">

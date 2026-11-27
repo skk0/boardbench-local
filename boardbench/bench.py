@@ -20,6 +20,7 @@ import select
 import socket
 import serial
 from serial.tools import list_ports
+from boardbench.devices.usb_screen import UsbScreen
 from boardbench.checks.smart import evaluate
 from boardbench.devices.monitor import Components, RESET_WINDOW
 from boardbench.checks.endurance import Endurance
@@ -146,6 +147,7 @@ class Bench:
         self.lost = None
         self.reset_on_open = False
         self.endurance = Endurance(self.db)
+        self.usb_screen = UsbScreen()
         self.components = Components(self.db)
         previous = self.db.execute(
             "SELECT profile FROM runs WHERE port != '离线故障包' ORDER BY id DESC LIMIT 1"
@@ -198,6 +200,7 @@ class Bench:
         self.current_rx_log_id = None
         self.endurance.stop("会话切换")
         self.components.reset()
+        self.usb_screen.reset()
         self.capture_key = None
         self.tests = self.profiles()[profile]
         self.profile = profile
@@ -234,6 +237,7 @@ class Bench:
             self.capture_settings()
             self.endurance.observe(self, message, row.lastrowid, reboot)
             if reboot:
+                self.usb_screen.reset()
                 self.connection_id += 1
         self.db.commit()
         if (level == "RX" and reboot and self.transport == "串口" and self.ser
@@ -365,6 +369,7 @@ class Bench:
         self.reset_on_open = False
         self.current_rx_log_id = None
         self.components.reset()
+        self.usb_screen.reset()
         self.ser = handle
         self.connection_id += 1
         self.transport = "串口"
@@ -385,6 +390,7 @@ class Bench:
             raise ValueError("请先断开现在的连接；换板子时软件会新开一条记录。")
         self.current_rx_log_id = None
         self.components.reset()
+        self.usb_screen.reset()
         self.ser = await NetworkPort.connect(host, port, transport)
         self.connection_id += 1
         self.transport = transport
@@ -406,9 +412,14 @@ class Bench:
         last = time.monotonic()
 
         next_check = 0
+        routed = False
 
         def output(raw):
             display = decoder.decode(raw)
+            if self.transport == "串口" and self.usb_screen.observe(display.rstrip("\r\n")):
+                return
+            if routed:
+                self.feed(raw)
             self.log("RX", self.transport, display.rstrip("\r\n"), raw.hex(" "))
 
         try:
@@ -426,7 +437,11 @@ class Bench:
                 if count and len(pending) < 8192:
                     data = self.ser.read(min(count, 8192))
                     self.rx += len(data)
-                    self.feed(data)
+                    # On a screen-capable port, screenshot payloads are separate from command replies.
+                    if not pending:
+                        routed = self.transport == "串口" and self.usb_screen.capability == "JPEG"
+                    if not routed:
+                        self.feed(data)
                     pending.extend(data)
                     last = time.monotonic()
                 for _ in range(128):
@@ -471,6 +486,7 @@ class Bench:
                     future.set_result(detail)
 
     def close_port(self):
+        self.usb_screen.reset()
         self.endurance.stop("连接中断")
         if self.ser:
             try:
