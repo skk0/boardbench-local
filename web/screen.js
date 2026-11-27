@@ -5,6 +5,20 @@
   const narrow = matchMedia("(max-width: 970px)");
   let activeTab = "monitor";
   let controller = null, timer = 0, shown = "";
+  const source = $("screenSource");
+  function syncSource() {
+    const local = source.value === "mcp";
+    source.disabled = Boolean(controller);
+    for (const input of [$("screenAddress"), $("screenPath"), $("screenCode")]) {
+      input.parentElement.hidden = local;
+      input.disabled = local || Boolean(controller);
+    }
+    $("screenHttpHelp").hidden = local;
+    $("screenMcpHelp").hidden = !local;
+    $("screenSetup").hidden = !local || Boolean(controller);
+  }
+  source.onchange = syncSource;
+  syncSource();
   function stop(message = "已停止") {
     controller?.abort();
     controller = null;
@@ -20,7 +34,7 @@
     $("screenDockHint").textContent = dock.open ? "屏幕预览" : "展开连接";
     $("screenStart").disabled = false;
     $("screenStop").disabled = true;
-    $("screenPath").disabled = $("screenAddress").disabled = $("screenCode").disabled = false;
+    syncSource();
   }
   $("screenForm").onsubmit = async event => {
     event.preventDefault();
@@ -31,7 +45,7 @@
     controller = current;
     $("screenStart").disabled = true;
     $("screenStop").disabled = false;
-    $("screenPath").disabled = $("screenAddress").disabled = $("screenCode").disabled = true;
+    syncSource();
     $("screenStatus").textContent = "正在连接";
     async function next() {
       let candidate = "";
@@ -39,7 +53,7 @@
         const res = await fetch("/api/screen/frame", {
           method: "POST", signal: current.signal,
           headers: {"Content-Type":"application/json", "X-BoardBench":token},
-          body: JSON.stringify({address, code, path})
+          body: JSON.stringify(source.value === "mcp" ? {source:"mcp"} : {address, code, path})
         });
         if (!res.ok) throw Error((await res.json()).error || "投屏连接失败");
         candidate = URL.createObjectURL(await res.blob());
@@ -54,7 +68,7 @@
         image.hidden = false;
         if (previous) URL.revokeObjectURL(previous);
         layout.classList.add("receiving");
-        $("screenDockHint").textContent = address;
+        $("screenDockHint").textContent = source.value === "mcp" ? "小智本地会话" : address;
         $("screenEmpty").hidden = true;
         if ($("screenStatus").textContent !== "投影中") $("screenStatus").textContent = "投影中";
         $("screenMeta").textContent = probe.naturalWidth + " × " + probe.naturalHeight + " · " + new Date().toLocaleTimeString();

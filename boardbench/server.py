@@ -60,7 +60,7 @@ def make_app(directory, monitor_usb=True):
 
     app = web.Application(middlewares=[policy], client_max_size=256 * 1024)
     routes = web.RouteTableDef()
-    screen_mirror.install(routes)
+    screen_mirror.install(routes, echo.capture_screen)
 
     @routes.get("/")
     async def index(req):

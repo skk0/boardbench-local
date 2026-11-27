@@ -317,6 +317,70 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         await self.post("echo", enable=False)
         self.assertIsNone((await (await self.client.get("/api/state")).json())["echo_checkin"])
 
+    async def test_unknown_xiaozhi_display_over_mcp(self):
+        from aiohttp import FormData
+
+        # A small SOF segment lets us assert that the exact device bytes are relayed.
+        jpeg = bytes.fromhex("ffd8 ffc0 000b 08 0040 0080 01 01 1100 ffd9")
+        with socket.socket() as bound:
+            bound.bind(("127.0.0.1", 0))
+            port = bound.getsockname()[1]
+        self.assertEqual((await self.post("echo", enable=True, host="127.0.0.1", port=port)).status, 200)
+        ota_url = (await (await self.client.get("/api/state")).json())["echo"]
+        async with ClientSession(headers={"Device-Id": "unknown-board"}) as device:
+            ota = await device.post(ota_url, json={"board": {"type": "never-seen-before"}})
+            ws_url = (await ota.json())["websocket"]["url"]
+            waiting = await self.post("screen/frame", source="mcp")
+            self.assertIn("已签到", (await waiting.json())["error"])
+
+            async def connect(modern=False):
+                ws = await device.ws_connect(ws_url)
+                await ws.send_json({"type": "hello", "version": 1, "features": {"mcp": True, "mcp_20260728": modern},
+                                    "audio_params": {"channels": 1, "sample_rate": 16000, "format": "opus"}})
+                self.assertEqual((await ws.receive_json(timeout=3))["type"], "hello")
+                return ws
+
+            async def exchange(ws, method, result):
+                message = await ws.receive_json(timeout=3)
+                payload = message["payload"]
+                self.assertEqual(payload["method"], method)
+                await ws.send_json({"type": "mcp", "payload": {"jsonrpc": "2.0", "id": payload["id"],
+                                                              "result": result}})
+                return payload["params"]
+
+            ws = await connect()
+            request = asyncio.create_task(self.post("screen/frame", source="mcp"))
+            await exchange(ws, "initialize", {"protocolVersion": "2024-11-05"})
+            first = await exchange(ws, "tools/list", {"tools": [], "nextCursor": "p2"})
+            self.assertTrue(first["withUserTools"])
+            second = await exchange(ws, "tools/list", {"tools": [{"name": "self.screen.snapshot"}]})
+            self.assertEqual(second["cursor"], "p2")
+            for index in range(2):
+                if index:
+                    request = asyncio.create_task(self.post("screen/frame", source="mcp"))
+                call = (await ws.receive_json(timeout=3))["payload"]
+                self.assertEqual(call["method"], "tools/call")
+                self.assertEqual(call["params"]["name"], "self.screen.snapshot")
+                upload = call["params"]["arguments"]["url"]
+                self.assertEqual((await device.post(upload + "-wrong")).status, 404)
+                form = FormData()
+                form.add_field("file", jpeg, filename="screenshot.jpg", content_type="image/jpeg")
+                self.assertEqual((await device.post(upload, data=form)).status, 200)
+                self.assertEqual((await device.post(upload)).status, 404)
+                await ws.send_json({"type": "mcp", "payload": {"id": call["id"], "result": {"content": []}}})
+                response = await request
+                self.assertEqual(response.status, 200)
+                self.assertEqual(await response.read(), jpeg)
+            await ws.close()
+            ws = await connect(modern=True)
+            request = asyncio.create_task(self.post("screen/frame", source="mcp"))
+            params = await exchange(ws, "tools/list", {"tools": [{"name": "self.screen.get_info"}]})
+            self.assertEqual(params["_meta"]["io.modelcontextprotocol/protocolVersion"], "2026-07-28")
+            response = await request
+            self.assertEqual(response.status, 400)
+            self.assertIn("需要适配", (await response.json())["error"])
+            await ws.close()
+
     async def test_local_audio_roundtrip(self):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))

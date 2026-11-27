@@ -6,6 +6,8 @@ import secrets
 import socket
 from aiohttp import web, WSMsgType
 
+from boardbench.devices.mcp_screen import McpScreen
+
 
 class Echo:
     def __init__(self, bench):
@@ -14,6 +16,7 @@ class Echo:
         self.url = self.device = ""
         self.frames = 0
         self.checkin = None
+        self.screen = None
 
     @staticmethod
     def address():
@@ -38,6 +41,7 @@ class Echo:
         app = web.Application(client_max_size=128 * 1024)
         app.router.add_post(self.route + "/ota/", self.ota)
         app.router.add_get(self.route + "/ws", self.socket)
+        app.router.add_post(self.route + "/screen/{ticket}", self.upload_screen)
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()
         try:
@@ -88,6 +92,18 @@ class Echo:
                 }
             }
         )
+
+    async def upload_screen(self, request):
+        if self.screen is None:
+            raise web.HTTPNotFound()
+        return await self.screen.accept(request)
+
+    async def capture_screen(self):
+        if self.runner and self.checkin and self.screen is None:
+            raise ValueError("设备已签到，等待 WebSocket 握手。请唤醒设备并确认固件支持本地 WebSocket v1。")
+        if self.screen is None:
+            raise ValueError("请在「语音回声」建立本地设备会话，等待 WebSocket 握手后再开始投屏。")
+        return await self.screen.capture()
 
     async def socket(self, request):
         if self.ws or (self.device and request.headers.get("Device-Id") != self.device):
@@ -147,12 +163,20 @@ class Echo:
                         await emit(
                             "hello", version=1, transport="websocket", audio_params=a
                         )
+                        if self.screen is None:
+                            features = m.get("features")
+                            modern = isinstance(features, dict) and features.get("mcp_20260728") is True
+                            self.screen = McpScreen(emit, self.base + self.route + "/screen", modern)
+                            if isinstance(features, dict) and features.get("mcp") is False:
+                                self.screen.supported = False
                         ready = True
                         self.bench.log(
                             "INFO",
                             "小智",
                             f"握手完成 · Opus {a['sample_rate']} Hz · {ms} ms/帧",
                         )
+                    elif kind == "mcp" and ready:
+                        self.screen.receive(m.get("payload"))
                     elif kind == "listen" and ready:
                         state = m.get("state")
                         self.bench.log("INFO", "小智", "listen · " + str(state))
@@ -175,6 +199,9 @@ class Echo:
         except (ValueError, TypeError, ConnectionError, AttributeError) as exc:
             self.bench.log("ERROR", "小智", "回声连接中断 · " + str(exc))
         finally:
+            if self.screen is not None:
+                self.screen.close()
+                self.screen = None
             await ws.close()
             self.ws = None
             self.bench.log("INFO", "小智", "WebSocket 已断开")

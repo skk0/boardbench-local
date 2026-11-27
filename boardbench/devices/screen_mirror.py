@@ -107,7 +107,7 @@ async def read_frame(url, code):
             return bytes(frame)
 
 
-def install(routes):
+def install(routes, capture_mcp=None):
     gate = asyncio.Lock()
 
     @routes.post("/api/screen/frame")
@@ -116,6 +116,17 @@ def install(routes):
             data = await req.json()
             if not isinstance(data, dict):
                 raise ValueError("投屏参数无效。")
+            if data.get("source") == "mcp":
+                if capture_mcp is None:
+                    raise ValueError("本地小智会话不可用。")
+                if gate.locked():
+                    return web.json_response({"error": "正在读取上一帧。"}, status=429)
+                async with gate:
+                    try:
+                        pixels = await capture_mcp()
+                    except asyncio.TimeoutError:
+                        raise ValueError("设备未及时回应截图请求，请检查连接与固件的 MCP 截图能力。") from None
+                return web.Response(body=pixels, content_type="image/jpeg")
             code = data.get("code", "")
             if not isinstance(code, str) or (code and not re.fullmatch(r"[0-9]{6}", code)):
                 raise ValueError("配对码应为六位数字。")
