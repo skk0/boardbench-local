@@ -10,8 +10,8 @@ from aiohttp.test_utils import TestServer, TestClient
 from unittest.mock import AsyncMock, patch
 
 from app import make_app
-from ai_analysis import Analysis, normalize
-from bench import Bench
+from boardbench.reports.ai_analysis import Analysis, normalize
+from boardbench.bench import Bench
 
 
 class AnalysisTests(unittest.IsolatedAsyncioTestCase):

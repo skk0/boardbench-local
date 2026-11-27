@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from bench import stamp
+from boardbench.bench import stamp
 
 GROUPS = {
     "上电与复位": ("供电与启动", "复位与启动日志"),

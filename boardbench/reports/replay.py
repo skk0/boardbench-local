@@ -4,7 +4,7 @@ import asyncio
 import re
 
 from aiohttp import web
-from monitor import PARTS, decode
+from boardbench.devices.monitor import PARTS, decode
 
 
 def unsigned(value, name):

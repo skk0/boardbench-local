@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import serial
 
-from bench import Bench, open_without_reset
-from monitor import AutoUSB, MAX_RESETS
+from boardbench.bench import Bench, open_without_reset
+from boardbench.devices.monitor import AutoUSB, MAX_RESETS
 
 PORT = "/dev/cu.usbmodem1101"
 DEVICE = dict(path=PORT, vid=0x303A, pid=0x1001, serial="F4:12:FA:00:00:01", label="USB JTAG/serial debug unit")
@@ -148,9 +148,9 @@ class ReconnectLoopTests(unittest.IsolatedAsyncioTestCase):
         self.b = Bench(":memory:")
         self.auto = AutoUSB(self.b, asyncio.Lock())
         self.patches = [
-            patch("bench.serial.Serial", FakeSerial),
+            patch("boardbench.bench.serial.Serial", FakeSerial),
             # The fake emulates macOS/Linux line handling on every OS, so pick the matching sequence.
-            patch("bench.open_without_reset", lambda handle: open_without_reset(handle, windows=False)),
+            patch("boardbench.bench.open_without_reset", lambda handle: open_without_reset(handle, windows=False)),
             patch.object(Bench, "ports", staticmethod(lambda: [DEVICE] if self.board.present else [])),
         ]
         for p in self.patches:
@@ -177,7 +177,7 @@ class ReconnectLoopTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reset_on_open_loop_is_capped(self):
         run = self.b.run
-        with patch("bench.open_without_reset", legacy_open):
+        with patch("boardbench.bench.open_without_reset", legacy_open):
             waits = await self.cycle(12)
         self.assertEqual(self.board.resets, MAX_RESETS, "stops reopening a board that resets on every open")
         self.assertEqual(waits, [3, 6], "backs off exponentially between attempts")
@@ -207,7 +207,7 @@ class ReconnectLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("刚连上时重启了一次" in m for m in messages), "ROM banner right after reopening")
 
     async def test_manual_connect_clears_the_stop(self):
-        with patch("bench.open_without_reset", legacy_open):
+        with patch("boardbench.bench.open_without_reset", legacy_open):
             await self.cycle(6)
         self.assertEqual(self.auto.gave_up, self.auto.current_key)
         self.b.connect(PORT, 115200)

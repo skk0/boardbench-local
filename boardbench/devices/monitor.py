@@ -5,8 +5,8 @@ import json
 import re
 import time
 
-from device_identity import identify
-from smart import key_cycles
+from boardbench.devices.device_identity import identify
+from boardbench.checks.smart import key_cycles
 
 RESET_WINDOW = 5    # seconds after opening in which a vanished port or ROM banner means "we reset it"
 MAX_RESETS = 3      # drops right after opening before auto-connect gives up on a device

@@ -9,11 +9,11 @@ import unittest
 import zlib
 from pathlib import Path
 
-import firmware as fw
-import flasher
+from boardbench.devices import firmware as fw
+from boardbench.devices import flasher
 from aiohttp.test_utils import TestClient, TestServer
 from app import make_app
-from bench import Bench
+from boardbench.bench import Bench
 from test_firmware import MB, image, merged
 
 MAC = (0xF4, 0x12, 0xFA, 0x00, 0x00, 0x01)

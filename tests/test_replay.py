@@ -2,8 +2,8 @@ import unittest
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
-from bench import Bench
-import replay
+from boardbench.bench import Bench
+from boardbench.reports import replay
 
 
 class ReplayTests(unittest.IsolatedAsyncioTestCase):

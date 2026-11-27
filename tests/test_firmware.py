@@ -10,7 +10,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-import firmware as fw
+from boardbench.devices import firmware as fw
 
 MB = 1024 * 1024
 LAYOUT = [("nvs", 1, 0x02, 0x9000, 0x4000), ("otadata", 1, 0x00, 0xD000, 0x2000),

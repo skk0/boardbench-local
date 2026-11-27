@@ -23,9 +23,9 @@ from esptool.loader import DEFAULT_TIMEOUT, ERASE_WRITE_TIMEOUT_PER_MB, timeout_
 from esptool.util import NotImplementedInROMError, flash_size_bytes, pad_to
 from serial.tools import list_ports
 
-import firmware
-from bench import open_without_reset
-from device_identity import XIAOZHI
+from boardbench.devices import firmware
+from boardbench.bench import open_without_reset
+from boardbench.devices.device_identity import XIAOZHI
 
 STEPS = ["选文件", "识别和检查", "看清会改哪些地方", "备份", "刷写", "校验", "开机确认"]
 BOOT_WATCH = 15

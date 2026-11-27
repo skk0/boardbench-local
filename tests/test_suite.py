@@ -1,9 +1,9 @@
 import asyncio
 import unittest
 import serial
-from bench import Bench
-from profiles import BUILTINS
-from suite import Suite, make_plan
+from boardbench.bench import Bench
+from boardbench.checks.profiles import BUILTINS
+from boardbench.checks.suite import Suite, make_plan
 
 
 class SuiteTests(unittest.IsolatedAsyncioTestCase):

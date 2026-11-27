@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 
 from aiohttp import web
 
-from monitor import decode
-from smart import KEY_LEVELS
+from boardbench.devices.monitor import decode
+from boardbench.checks.smart import KEY_LEVELS
 
 PAGE = 128
 STALE_MS = 8000  # Same interval as the component monitor.

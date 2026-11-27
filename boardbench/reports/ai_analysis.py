@@ -9,7 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 from aiohttp import web
-from bench import stamp
+from boardbench.bench import stamp
 
 DEFAULT_URL = "http://127.0.0.1:11434/v1"
 SYSTEM = """你是板卡测试工程师，用简洁中文解释本次测试。只依据输入中的记录。

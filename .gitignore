@@ -8,3 +8,5 @@ dist/
 *.sqlite3*
 test-results/
 .venv-desktop/
+.ruff_cache/
+docs/local/

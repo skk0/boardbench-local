@@ -20,11 +20,11 @@ import select
 import socket
 import serial
 from serial.tools import list_ports
-from smart import evaluate
-from monitor import Components, RESET_WINDOW
-from endurance import Endurance
-from replies import ReplyMatch
-from profiles import BUILTINS, validate
+from boardbench.checks.smart import evaluate
+from boardbench.devices.monitor import Components, RESET_WINDOW
+from boardbench.checks.endurance import Endurance
+from boardbench.checks.replies import ReplyMatch
+from boardbench.checks.profiles import BUILTINS, validate
 
 
 def stamp():

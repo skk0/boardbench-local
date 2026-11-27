@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase, TestServer
 
-from monitor import BOX_PARTS, decode
-from screen_mirror import destination, install, jpeg_dimensions, read_frame
+from boardbench.devices.monitor import BOX_PARTS, decode
+from boardbench.devices.screen_mirror import destination, install, jpeg_dimensions, read_frame
 
 
 class ScreenTests(unittest.TestCase):
@@ -36,7 +36,7 @@ class ScreenAPITests(AioHTTPTestCase):
         return app
 
     async def test_frame_delivery_and_rejection(self):
-        with patch("screen_mirror.read_frame", new_callable=AsyncMock, return_value=b"fixture") as pull:
+        with patch("boardbench.devices.screen_mirror.read_frame", new_callable=AsyncMock, return_value=b"fixture") as pull:
             r = await self.client.post("/api/screen/frame", json={"address":"192.168.1.7","code":"012345"})
             self.assertEqual(await r.read(), b"fixture")
             pull.assert_awaited_once_with("http://192.168.1.7:8088/screen.jpg", "012345")

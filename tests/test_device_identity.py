@@ -1,7 +1,7 @@
 import unittest
 
-from bench import Bench
-from device_identity import identify
+from boardbench.bench import Bench
+from boardbench.devices.device_identity import identify
 
 
 class DeviceIdentityTests(unittest.TestCase):

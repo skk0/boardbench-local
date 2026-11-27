@@ -11,8 +11,8 @@ import serial
 from aiohttp.test_utils import TestClient, TestServer
 from aiohttp import ClientSession
 from app import make_app
-from bench import Bench, valid_flash_probe
-from profiles import validate, BUILTINS
+from boardbench.bench import Bench, valid_flash_probe
+from boardbench.checks.profiles import validate, BUILTINS
 
 
 class BenchTests(unittest.IsolatedAsyncioTestCase):

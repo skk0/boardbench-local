@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import serial
 
-from bench import Bench
-from monitor import AutoUSB, decode
+from boardbench.bench import Bench
+from boardbench.devices.monitor import AutoUSB, decode
 
 
 class MonitorTests(unittest.IsolatedAsyncioTestCase):
@@ -88,7 +88,7 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             b = Bench(Path(folder) / "history.sqlite3")
             b.ser = serial.serial_for_url("loop://", timeout=0)
             with patch(
-                "bench.shutil.disk_usage", return_value=SimpleNamespace(free=1000)
+                "boardbench.bench.shutil.disk_usage", return_value=SimpleNamespace(free=1000)
             ):
                 await b.read_loop()
             self.assertIsNone(b.ser)

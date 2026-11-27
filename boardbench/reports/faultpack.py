@@ -6,9 +6,9 @@ import json
 import re
 from datetime import datetime
 
-from ai_analysis import scrub
-from bench import stamp
-from replay import annotate
+from boardbench.reports.ai_analysis import scrub
+from boardbench.bench import stamp
+from boardbench.reports.replay import annotate
 
 FORMAT = "boardbench-fault-v1"
 LIMIT = 524288

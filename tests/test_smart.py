@@ -2,8 +2,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-from bench import Bench
-from smart import evaluate, factory_detail, key_cycles
+from boardbench.bench import Bench
+from boardbench.checks.smart import evaluate, factory_detail, key_cycles
 
 
 class SmartChecks(unittest.TestCase):

@@ -1,7 +1,7 @@
 """Built-in inspection plans. A plan describes firmware capabilities, never guessed pins."""
 
 import re
-from replies import ReplyMatch, try_sample
+from boardbench.checks.replies import ReplyMatch, try_sample
 
 
 def manual(name, step):

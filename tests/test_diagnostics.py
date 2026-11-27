@@ -5,11 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import faultpack
-from bench import Bench
-from monitor import AutoUSB
-from profiles import validate
-from replies import ReplyMatch, try_sample
+from boardbench.reports import faultpack
+from boardbench.bench import Bench
+from boardbench.devices.monitor import AutoUSB
+from boardbench.checks.profiles import validate
+from boardbench.checks.replies import ReplyMatch, try_sample
 
 
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
@@ -131,7 +131,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         b.ser = True
         service = b.endurance
         service.start(b, "原版/无摄像头", 1)
-        with patch("endurance.time.monotonic", side_effect=lambda: tick[0]):
+        with patch("boardbench.checks.endurance.time.monotonic", side_effect=lambda: tick[0]):
             tick = [service.begin]
 
             def sample(line):

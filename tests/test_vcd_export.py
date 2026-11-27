@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from bench import Bench
-from vcd_export import routes
+from boardbench.bench import Bench
+from boardbench.reports.vcd_export import routes
 
 
 class VcdTests(unittest.IsolatedAsyncioTestCase):
