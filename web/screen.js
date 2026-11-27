@@ -20,17 +20,18 @@
     $("screenDockHint").textContent = dock.open ? "屏幕预览" : "展开连接";
     $("screenStart").disabled = false;
     $("screenStop").disabled = true;
-    $("screenAddress").disabled = $("screenCode").disabled = false;
+    $("screenPath").disabled = $("screenAddress").disabled = $("screenCode").disabled = false;
   }
   $("screenForm").onsubmit = async event => {
     event.preventDefault();
     if (controller) return;
     const address = $("screenAddress").value.trim(), code = $("screenCode").value;
+    const path = $("screenPath").value.trim();
     const current = new AbortController();
     controller = current;
     $("screenStart").disabled = true;
     $("screenStop").disabled = false;
-    $("screenAddress").disabled = $("screenCode").disabled = true;
+    $("screenPath").disabled = $("screenAddress").disabled = $("screenCode").disabled = true;
     $("screenStatus").textContent = "正在连接";
     async function next() {
       let candidate = "";
@@ -38,7 +39,7 @@
         const res = await fetch("/api/screen/frame", {
           method: "POST", signal: current.signal,
           headers: {"Content-Type":"application/json", "X-BoardBench":token},
-          body: JSON.stringify({address, code})
+          body: JSON.stringify({address, code, path})
         });
         if (!res.ok) throw Error((await res.json()).error || "投屏连接失败");
         candidate = URL.createObjectURL(await res.blob());

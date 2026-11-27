@@ -6,6 +6,7 @@
 #include <esp_http_server.h>
 #include <esp_random.h>
 #include <esp_timer.h>
+#include <esp_log.h>
 #include <atomic>
 #include <cstdio>
 #include <cstring>
@@ -101,7 +102,12 @@ void Toggle() {
         return;
     }
     enabled = true;
+#ifdef BOARDBENCH_COMPACT_PAIRING
+    ESP_LOGI("ScreenMirror", "Screen address: %s:8088", ip.c_str());
+    display->ShowNotification(std::to_string(code), 12000);
+#else
     display->ShowNotification(ip + "  码 " + std::to_string(code), 12000);
+#endif
 }
 }
 

@@ -1,0 +1,98 @@
+diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
+index 45204d6..fcc3b2c 100644
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -1001,6 +1001,10 @@ file(GLOB BOARD_SOURCES
+     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
+ )
+ list(APPEND SOURCES ${BOARD_SOURCES})
++if(CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI OR CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI_LCD)
++    list(APPEND SOURCES "screen_mirror/desk_mirror.cc")
++    set_source_files_properties("screen_mirror/desk_mirror.cc" PROPERTIES COMPILE_DEFINITIONS BOARDBENCH_COMPACT_PAIRING)
++endif()
+
+ # Select one audio engine for each chip family
+ if(CONFIG_IDF_TARGET_ESP32S3 OR CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32S31)
+diff --git a/main/application.cc b/main/application.cc
+index 300a36c..4030fc4 100644
+--- a/main/application.cc
++++ b/main/application.cc
+@@ -1,4 +1,7 @@
+ #include "application.h"
++#if CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI || CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI_LCD
++#include "screen_mirror/desk_mirror.h"
++#endif
+ #include "assets.h"
+ #include "assets/lang_config.h"
+ #include "audio_codec.h"
+@@ -155,9 +158,15 @@ void Application::Initialize() {
+                 break;
+             }
+             case NetworkEvent::Disconnected:
++#if CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI || CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI_LCD
++                CloseDeskMirror();
++#endif
+                 xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_DISCONNECTED);
+                 break;
+             case NetworkEvent::WifiConfigModeEnter:
++#if CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI || CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI_LCD
++                CloseDeskMirror();
++#endif
+                 // WiFi config mode enter is handled by WifiBoard internally
+                 break;
+             case NetworkEvent::WifiConfigModeExit:
+diff --git a/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc b/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc
+index 431cc43..769340f 100644
+--- a/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc
++++ b/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc
+@@ -3,6 +3,7 @@
+ #include "display/lcd_display.h"
+ #include "system_reset.h"
+ #include "application.h"
++#include "../../screen_mirror/desk_mirror.h"
+ #include "button.h"
+ #include "config.h"
+ #include "mcp_server.h"
+@@ -123,6 +124,7 @@ private:
+     }
+
+     void InitializeButtons() {
++        boot_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
+         boot_button_.OnClick([this]() {
+             auto& app = Application::GetInstance();
+             if (app.GetDeviceState() == kDeviceStateStarting) {
+diff --git a/main/boards/bread-compact-wifi/compact_wifi_board.cc b/main/boards/bread-compact-wifi/compact_wifi_board.cc
+index 28b8c56..bb11aaa 100644
+--- a/main/boards/bread-compact-wifi/compact_wifi_board.cc
++++ b/main/boards/bread-compact-wifi/compact_wifi_board.cc
+@@ -3,6 +3,7 @@
+ #include "display/oled_display.h"
+ #include "system_reset.h"
+ #include "application.h"
++#include "../../screen_mirror/desk_mirror.h"
+ #include "button.h"
+ #include "config.h"
+ #include "mcp_server.h"
+@@ -101,6 +102,7 @@ private:
+     }
+
+     void InitializeButtons() {
++        boot_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
+         boot_button_.OnClick([this]() {
+             auto& app = Application::GetInstance();
+             if (app.GetDeviceState() == kDeviceStateStarting) {
+diff --git a/main/display/lvgl_display/lvgl_display.cc b/main/display/lvgl_display/lvgl_display.cc
+index 12a887e..6eab2fb 100644
+--- a/main/display/lvgl_display/lvgl_display.cc
++++ b/main/display/lvgl_display/lvgl_display.cc
+@@ -321,8 +321,10 @@ void LvglDisplay::SetPowerSaveMode(bool on) {
+ bool LvglDisplay::SnapshotToJpeg(std::string& jpeg_data, int quality) {
+ #if CONFIG_LV_USE_SNAPSHOT
+     DisplayLockGuard lock(this);
++    if (!lock) return false;
+
+     lv_obj_t* screen = lv_screen_active();
++    if (!screen) return false;
+     lv_draw_buf_t* draw_buffer = lv_snapshot_take(screen, LV_COLOR_FORMAT_RGB565);
+     if (draw_buffer == nullptr) {
+         ESP_LOGE(TAG, "Failed to take snapshot, draw_buffer is nullptr");
