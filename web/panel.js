@@ -608,7 +608,7 @@ bind("history", async () => {
 const tabButtons = [...document.querySelectorAll(".rail [data-tab]")];
 for (const b of tabButtons)
   b.onclick = () => {
-    document.body.classList.toggle("ai-view", ["analysis", "replay", "overview"].includes(b.dataset.tab));
+    document.body.classList.toggle("ai-view", ["analysis", "replay", "overview", "screen"].includes(b.dataset.tab));
     if (b.dataset.tab !== "monitor" && selectedPart) {
       clearPart();
       logs(true);

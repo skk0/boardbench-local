@@ -1,0 +1,225 @@
+diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
+index 45204d6..5e7b1c3 100644
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -859,12 +859,12 @@ elseif(CONFIG_BOARD_TYPE_ZHENGCHEN_1_54TFT_ML307)
+     set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_64)
+ elseif(CONFIG_BOARD_TYPE_ZHENGCHEN_CAM)
+     set(BOARD_DIR "zhengchen/cam")
+-    set(BUILTIN_TEXT_FONT font_noto_sans_basic_20_4)
++    set(BUILTIN_TEXT_FONT font_noto_sans_basic_16_4)
+     set(BUILTIN_ICON_FONT font_material_symbols_20_4)
+     set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_64)
+ elseif(CONFIG_BOARD_TYPE_ZHENGCHEN_CAM_ML307)
+     set(BOARD_DIR "zhengchen/cam-ml307")
+-    set(BUILTIN_TEXT_FONT font_noto_sans_basic_20_4)
++    set(BUILTIN_TEXT_FONT font_noto_sans_basic_16_4)
+     set(BUILTIN_ICON_FONT font_material_symbols_20_4)
+     set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_64)
+ elseif(CONFIG_BOARD_TYPE_SPOTPEAR_ESP32_S3_1_54_MUMA)
+@@ -1001,6 +1001,13 @@ file(GLOB BOARD_SOURCES
+     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
+ )
+ list(APPEND SOURCES ${BOARD_SOURCES})
++if(CONFIG_BOARD_TYPE_ZHENGCHEN_CAM_ML307)
++    set(CLOCK_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/boards/zhengchen/cam")
++    list(APPEND SOURCES
++        "${CLOCK_UI_DIR}/desk_display.cc" "${CLOCK_UI_DIR}/desk_face.cc"
++        "${CLOCK_UI_DIR}/desk_weather.cc" "${CLOCK_UI_DIR}/desk_weather_data.cc"
++        "${CLOCK_UI_DIR}/desk_digits.c" "${CLOCK_UI_DIR}/desk_mirror.cc")
++endif()
+ 
+ # Select one audio engine for each chip family
+ if(CONFIG_IDF_TARGET_ESP32S3 OR CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32S31)
+@@ -1198,6 +1205,9 @@ endif()
+ if(IDF_TARGET STREQUAL "esp32s3")
+     list(APPEND MAIN_PRIV_REQUIRES_EXTRA esp_driver_usb_serial_jtag)
+ endif()
++if(IDF_TARGET STREQUAL "esp32s3")
++    list(APPEND MAIN_PRIV_REQUIRES_EXTRA esp_http_client esp_http_server esp_wifi mbedtls)
++endif()
+ idf_component_register(SRCS ${SOURCES}
+                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
+                     INCLUDE_DIRS ${INCLUDE_DIRS}
+@@ -1588,3 +1598,7 @@ if ("${size}" AND "${offset}")
+ else()
+     message(STATUS "Assets partition not found, using v1 partition table")
+ endif()
++
++if(CONFIG_BOARD_TYPE_ZHENGCHEN_CAM OR CONFIG_BOARD_TYPE_ZHENGCHEN_CAM_ML307)
++    target_add_binary_data(${COMPONENT_LIB} "boards/zhengchen/cam/desk_wall.rgb565" BINARY)
++endif()
+diff --git a/main/boards/zhengchen/cam-ml307/mcp_controller.cc b/main/boards/zhengchen/cam-ml307/mcp_controller.cc
+index 0f7f073..2785453 100644
+--- a/main/boards/zhengchen/cam-ml307/mcp_controller.cc
++++ b/main/boards/zhengchen/cam-ml307/mcp_controller.cc
+@@ -10,6 +10,7 @@
+ #include "sdkconfig.h"
+ #include "settings.h"
+ #include "display.h"
++#include "../cam/desk_weather.h"
+ 
+ #define TAG "MCPController"
+ 
+@@ -24,7 +25,16 @@ public:
+         auto& mcp_server = McpServer::GetInstance();
+ 		ESP_LOGI(TAG, "开始注册MCP工具...");
+ 
+-	mcp_server.AddTool(
++	mcp_server.AddTool("self.screen.set_weather_city",
++        "根据用户说的城市名设置待机天气。请将城市中心的纬度、经度分别乘100取整，调用本工具。此设置用于本次网络连接，下次联网会自动按公网 IP 定位。",
++        PropertyList({Property("latitude100", kPropertyTypeInteger, -9000, 9000),
++                      Property("longitude100", kPropertyTypeInteger, -18000, 18000)}),
++        [](const PropertyList& properties) -> ReturnValue {
++            SetDeskLocation(properties["latitude100"].value<int>(), properties["longitude100"].value<int>());
++            return "本次连接的天气地点已设置";
++        });
++
++    mcp_server.AddTool(
+         "self.AEC.set_mode", 
+         "设置AEC对话打断模式。当用户意图切换对话打断模式时或者用户觉得ai对话容易被打断时或者用户觉得无法实现对话打断时都使用此工具。\n"
+         "参数：\n"
+diff --git a/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc b/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
+index 2c2250e..96fad05 100644
+--- a/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
++++ b/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
+@@ -1,7 +1,8 @@
+ #include "dual_network_board.h"
+ #include "audio/codecs/box_audio_codec.h"
+-#include "display/lcd_display.h"
++#include "../cam/desk_display.h"
+ #include "application.h"
++#include "../cam/desk_mirror.h"
+ #include "button.h"
+ #include "led/single_led.h"
+ #include "config.h"
+@@ -173,6 +174,8 @@ private:
+             
+         });
+ 
++        volume_up_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
++
+         volume_up_button_.OnLongPress([this]() {
+             GetAudioCodec()->SetOutputVolume(100);
+             GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+@@ -230,7 +233,7 @@ private:
+             // 横屏模式
+             esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
+             esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
+-            display_ = new SpiLcdDisplay(panel_io, panel,
++            display_ = new DeskDisplay(panel_io, panel,
+                                         DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+ 
+         } else {
+@@ -311,6 +314,18 @@ public:
+         return &led;
+     }
+ 
++    void SetNetworkEventCallback(NetworkEventCallback callback) override {
++        DualNetworkBoard::SetNetworkEventCallback([notify = std::move(callback)](NetworkEvent event, const std::string& data) {
++            if (event == NetworkEvent::Connected) {
++                DeskWeatherNetworkChanged(true);
++            } else if (event == NetworkEvent::Disconnected || event == NetworkEvent::WifiConfigModeEnter) {
++                CloseDeskMirror();
++                DeskWeatherNetworkChanged(false);
++            }
++            if (notify) notify(event, data);
++        });
++    }
++
+     virtual bool GetBatteryLevel(int& level, bool& charging, bool& discharging)  override {
+         static bool last_discharging = false;
+         charging = power_manager_->IsCharging();
+diff --git a/main/boards/zhengchen/cam/mcp_controller.cc b/main/boards/zhengchen/cam/mcp_controller.cc
+index 0f7f073..25f2942 100644
+--- a/main/boards/zhengchen/cam/mcp_controller.cc
++++ b/main/boards/zhengchen/cam/mcp_controller.cc
+@@ -10,6 +10,7 @@
+ #include "sdkconfig.h"
+ #include "settings.h"
+ #include "display.h"
++#include "desk_weather.h"
+ 
+ #define TAG "MCPController"
+ 
+@@ -24,7 +25,16 @@ public:
+         auto& mcp_server = McpServer::GetInstance();
+ 		ESP_LOGI(TAG, "开始注册MCP工具...");
+ 
+-	mcp_server.AddTool(
++	mcp_server.AddTool("self.screen.set_weather_city",
++        "根据用户说的城市名设置待机天气。请将城市中心的纬度、经度分别乘100取整，调用本工具。此设置用于本次 Wi-Fi 连接，下次联网会自动按公网 IP 定位。",
++        PropertyList({Property("latitude100", kPropertyTypeInteger, -9000, 9000),
++                      Property("longitude100", kPropertyTypeInteger, -18000, 18000)}),
++        [](const PropertyList& properties) -> ReturnValue {
++            SetDeskLocation(properties["latitude100"].value<int>(), properties["longitude100"].value<int>());
++            return "本次连接的天气地点已设置";
++        });
++
++    mcp_server.AddTool(
+         "self.AEC.set_mode", 
+         "设置AEC对话打断模式。当用户意图切换对话打断模式时或者用户觉得ai对话容易被打断时或者用户觉得无法实现对话打断时都使用此工具。\n"
+         "参数：\n"
+diff --git a/main/boards/zhengchen/cam/zhengchen_cam_board.cc b/main/boards/zhengchen/cam/zhengchen_cam_board.cc
+index 8cc28ec..e87269c 100644
+--- a/main/boards/zhengchen/cam/zhengchen_cam_board.cc
++++ b/main/boards/zhengchen/cam/zhengchen_cam_board.cc
+@@ -1,7 +1,8 @@
+ #include "wifi_board.h"
+ #include "audio/codecs/box_audio_codec.h"
+-#include "display/lcd_display.h"
++#include "desk_display.h"
+ #include "application.h"
++#include "../cam/desk_mirror.h"
+ #include "button.h"
+ #include "led/single_led.h"
+ #include "config.h"
+@@ -167,6 +168,8 @@ private:
+             
+         });
+ 
++        volume_up_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
++
+         volume_up_button_.OnLongPress([this]() {
+             GetAudioCodec()->SetOutputVolume(100);
+             GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+@@ -224,7 +227,7 @@ private:
+             // 横屏模式
+             esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
+             esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
+-            display_ = new SpiLcdDisplay(panel_io, panel,
++            display_ = new DeskDisplay(panel_io, panel,
+                                         DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+ 
+         } else {
+@@ -304,6 +307,18 @@ public:
+         return &led;
+     }
+ 
++    void SetNetworkEventCallback(NetworkEventCallback callback) override {
++        WifiBoard::SetNetworkEventCallback([notify = std::move(callback)](NetworkEvent event, const std::string& data) {
++            if (event == NetworkEvent::Connected) {
++                DeskWeatherNetworkChanged(true);
++            } else if (event == NetworkEvent::Disconnected || event == NetworkEvent::WifiConfigModeEnter) {
++                CloseDeskMirror();
++                DeskWeatherNetworkChanged(false);
++            }
++            if (notify) notify(event, data);
++        });
++    }
++
+     virtual bool GetBatteryLevel(int& level, bool& charging, bool& discharging)  override {
+         static bool last_discharging = false;
+         charging = power_manager_->IsCharging();
+diff --git a/main/display/lvgl_display/lvgl_display.cc b/main/display/lvgl_display/lvgl_display.cc
+index 12a887e..2798aca 100644
+--- a/main/display/lvgl_display/lvgl_display.cc
++++ b/main/display/lvgl_display/lvgl_display.cc
+@@ -321,6 +321,7 @@ void LvglDisplay::SetPowerSaveMode(bool on) {
+ bool LvglDisplay::SnapshotToJpeg(std::string& jpeg_data, int quality) {
+ #if CONFIG_LV_USE_SNAPSHOT
+     DisplayLockGuard lock(this);
++    if (!lock) return false;
+ 
+     lv_obj_t* screen = lv_screen_active();
+     lv_draw_buf_t* draw_buffer = lv_snapshot_take(screen, LV_COLOR_FORMAT_RGB565);

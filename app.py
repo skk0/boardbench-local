@@ -28,6 +28,7 @@ import faultpack
 from replies import try_sample
 from profiles import validate
 import replay
+import screen_mirror
 import vcd_export
 from ai_analysis import Analysis
 from bench import Bench
@@ -72,6 +73,7 @@ def make_app(directory, monitor_usb=True):
 
     app = web.Application(middlewares=[policy], client_max_size=256 * 1024)
     routes = web.RouteTableDef()
+    screen_mirror.install(routes)
 
     @routes.get("/")
     async def index(req):

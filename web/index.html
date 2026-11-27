@@ -23,6 +23,8 @@
     <script defer src="/static/overview.js"></script>
     <script defer src="/static/diagnostics.js"></script>
     <script defer src="/static/flash.js"></script>
+    <script defer src="/static/screen.js"></script>
+    <link rel="stylesheet" href="/static/screen.css" />
   </head>
   <body>
     <aside class="rail">
@@ -34,6 +36,7 @@
         <button data-tab="monitor" class="active" aria-current="page">
           <i aria-hidden="true" class="ico activity"></i>板子状态
         </button>
+        <button data-tab="screen"><i aria-hidden="true" class="ico squares-four"></i>屏幕投影</button>
         <button data-tab="flash">
           <i aria-hidden="true" class="ico arrows-down-up"></i>刷固件
         </button>
@@ -165,6 +168,31 @@
         </div>
         <div class="grid">
           <section class="panel">
+            <section id="screen" class="tab" hidden>
+              <div class="section-title"><i class="ico squares-four" aria-hidden="true"></i><h2>屏幕投影</h2></div>
+              <div class="screen-layout">
+                <figure class="screen-stage">
+                  <div class="screen-glass"><img id="screenFrame" alt="板子当前的屏幕画面" hidden />
+                    <span id="screenEmpty">等待第一帧画面</span></div>
+                  <figcaption><span id="screenStatus" role="status">未连接</span><span id="screenMeta"></span></figcaption>
+                </figure>
+                <form id="screenForm" class="screen-settings">
+                  <h3>连接板子屏幕</h3>
+                  <p>电脑和板子连同一 Wi-Fi。征辰时钟固件 r4 双击音量加键可查看地址和配对码，再双击即可关闭。</p>
+                  <label>板子地址<input id="screenAddress" required placeholder="如 192.168.1.50" autocomplete="off" spellcheck="false" /></label>
+                  <label>配对码<input id="screenCode" placeholder="板上显示的六位数字" inputmode="numeric" type="password" maxlength="6" pattern="[0-9]{6}" autocomplete="off" /></label>
+                  <div class="row"><button type="submit" class="primary" id="screenStart">开始投影</button><button type="button" id="screenStop" disabled>停止</button></div>
+                </form>
+              </div>
+              <details class="screen-support"><summary>哪些板子和元件能用？</summary>
+                <dl>
+                  <dt>屏幕画面</dt><dd>征辰 Wi-Fi、征辰 Wi-Fi＋ML307 的 r4 横屏固件支持局域网投影。ML307 版需切到 Wi-Fi。其他固件可实现相同的 JPEG 接口。只有串口日志的设备可在「板子状态」查看输出。</dd>
+                  <dt>自动体检</dt><dd>通用串口、ESP32、MicroPython / CircuitPython REPL 和 BoardBenchProbe 各有检查方案。正点原子一代 BOX 的专用探针还能读取六轴、按键、I²C 应答和背光控制状态。</dd>
+                  <dt>小智设备</dt><dd>征辰两款和 ESP32-S3 单麦 Wi-Fi 面包板有独立检查清单。收到相应日志时显示屏幕、音频、摄像头、天气、语音连接和 4G 模块记录。</dd>
+                  <dt>扩展传感器</dt><dd>固件可按 BoardBench 遥测格式上报温度、湿度、气压等读数和器件型号。未上报的器件不会标为正常。</dd>
+                </dl>
+              </details>
+            </section>
             <section id="overview" class="tab" hidden></section>
             <section id="monitor" class="tab">
               <div class="section-title">

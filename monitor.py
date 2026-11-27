@@ -36,6 +36,11 @@ PARTS = {
     "expansion": "PH2.0 扩展",
     "i2c": "I²C 总线",
 }
+BOX_PARTS = tuple(PARTS)
+PARTS.update({
+    "modem": "蜂窝通信模块", "session": "语音连接", "weather": "天气服务",
+    "temperature": "温度", "humidity": "湿度", "pressure": "气压",
+})
 STATES = {
     "sample": "有读数",
     "ack": "有应答",
@@ -65,6 +70,10 @@ TAGS = {
     "lcddisplay": "lcd",
     "esp_lcd": "lcd",
     "camera": "camera",
+    "ml307board": "modem", "ml307atmodem": "modem",
+    "mqtt": "session", "websocket": "session", "deskweather": "weather",
+    "esp32camera": "camera", "es7210": "audio",
+
     "sdmmc": "sd",
     "sdspi": "sd",
     "i2c": "i2c",
@@ -100,6 +109,8 @@ def decode(line):
         part = TAGS.get(tag)
         if tag == "esp_netif_handlers" and plain[match.end():].lstrip().lower().startswith("sta ip:"):
             part = "wifi"
+        if part == "modem" and re.search(r"\b(?:IMEI|IMSI|ICCID)\b", plain, re.I):
+            return None
         if part:
             return (
                 part,
@@ -215,7 +226,7 @@ class Components:
         return reboot
 
     def states(self, profile, connected):
-        names = PARTS if profile in {"正点原子 · DNESP32S3B BOX", "DNESP32S3B BOX · BoardBenchProbe 固件"} else ()
+        names = BOX_PARTS if profile in {"正点原子 · DNESP32S3B BOX", "DNESP32S3B BOX · BoardBenchProbe 固件"} else ()
         rows = []
         for part in dict.fromkeys([*names, *self.last]):
             last = self.last.get(part, {})

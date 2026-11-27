@@ -148,7 +148,19 @@ probe = [
 for item in probe:
     item["reject"] = "ERR "
 
+zhengchen = generic + [
+    manual("LCD 显示", "时钟固件 r4 可在同一 Wi-Fi 上双击音量加，再打开屏幕投影。实物另查背光和坏点。"),
+    manual("语音与相机", "唤醒小智检查采音与播报；运行拍照并核对画面。"),
+    manual("天气与定位", "联网后核对屏上的城市和气温，可在 DeskWeather 日志中查看更新结果。"),
+]
 BUILTINS = {
+    "征辰 · AI Camera Wi-Fi": zhengchen,
+    "征辰 · AI Camera Wi-Fi + ML307": zhengchen + [
+        manual("4G 通信", "观察 Ml307Board 的 SIM、注册及网络连接日志，再验证语音会话。"),
+    ],
+    "ESP32-S3 · 单麦 Wi-Fi 面包板": generic + [
+        manual("语音会话", "唤醒小智，记录 MQTT 或 WebSocket 握手、麦克风采音和扬声器播放。"),
+    ],
     "通用串口设备": generic,
     "ESP32 · BoardBenchProbe 固件": probe,
     "DNESP32S3B BOX · BoardBenchProbe 固件": probe
@@ -171,6 +183,12 @@ BUILTINS = {
     ],
     "正点原子 · DNESP32S3B BOX": box,
     "MicroPython REPL": mp,
+    "CircuitPython REPL": [
+        command("解释器与机器信息", "适用于已经停在 >>> 的 CircuitPython。",
+                "import os; print('BOARD'+'_OK', os.uname())", "BOARD_OK"),
+        command("可用堆内存", "读取解释器空闲堆空间，单位为字节。",
+                "import gc; print('HEAP'+'_OK', gc.mem_free())", "HEAP_OK"),
+    ],
 }
 
 
