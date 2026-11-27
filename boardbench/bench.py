@@ -20,7 +20,7 @@ import select
 import socket
 import serial
 from serial.tools import list_ports
-from boardbench.devices.usb_screen import UsbScreen
+from boardbench.devices.usb_screen import SerialReplyFilter, UsbScreen
 from boardbench.checks.smart import evaluate
 from boardbench.devices.monitor import Components, RESET_WINDOW
 from boardbench.checks.endurance import Endurance
@@ -412,14 +412,12 @@ class Bench:
         last = time.monotonic()
 
         next_check = 0
-        routed = False
+        replies = SerialReplyFilter()
 
         def output(raw):
             display = decoder.decode(raw)
             if self.transport == "串口" and self.usb_screen.observe(display.rstrip("\r\n")):
                 return
-            if routed:
-                self.feed(raw)
             self.log("RX", self.transport, display.rstrip("\r\n"), raw.hex(" "))
 
         try:
@@ -438,10 +436,9 @@ class Bench:
                     data = self.ser.read(min(count, 8192))
                     self.rx += len(data)
                     # On a screen-capable port, screenshot payloads are separate from command replies.
-                    if not pending:
-                        routed = self.transport == "串口" and self.usb_screen.capability == "JPEG"
-                    if not routed:
-                        self.feed(data)
+                    reply = replies.feed(data) if self.transport == "串口" else data
+                    if reply:
+                        self.feed(reply)
                     pending.extend(data)
                     last = time.monotonic()
                 for _ in range(128):
@@ -457,6 +454,8 @@ class Bench:
                     and b"\n" not in pending
                     and time.monotonic() - last > 0.15
                 ):
+                    if prefix := replies.flush_prefix():
+                        self.feed(prefix)
                     output(bytes(pending))
                     pending.clear()
                 await asyncio.sleep(0.025)

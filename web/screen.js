@@ -7,8 +7,16 @@
   let controller = null, timer = 0, shown = "";
   const source = $("screenSource");
   let usb = null, connection = null, attempted = null, revealed = null;
+  function isUsb() {
+    return source.value === "usb" || source.value === "usb-snap";
+  }
   function updateUsb() {
-    if (source.value !== "usb") return;
+    if (!isUsb()) return;
+    if (source.value === "usb-snap") {
+      $("screenUsbHelp").textContent = "仅用于确认支持 snap 命令的固件。点开始后会向当前 USB 端口请求 JPEG 截图。";
+      if (!controller) $("screenStart").disabled = !usb || usb.status === "offline";
+      return;
+    }
     $("screenUsbHelp").textContent = usb?.hint || "等待 USB 连接。";
     if (usb?.status && usb.status !== "offline" && testTabs.has(activeTab) && revealed !== connection) {
       revealed = connection;
@@ -28,7 +36,7 @@
   document.addEventListener("boardbench:usb-screen", event => {
     const data = event.detail;
     if (connection !== data.connection_id || !data.connected) {
-      if (controller && source.value === "usb") stop("USB 已断开或设备已变更");
+      if (controller && isUsb()) stop("USB 已断开或设备已变更");
       attempted = null;
       revealed = null;
     }
@@ -39,7 +47,7 @@
   function syncSource() {
     const local = source.value === "mcp";
     const http = source.value === "http";
-    $("screenUsbHelp").hidden = source.value !== "usb";
+    $("screenUsbHelp").hidden = !isUsb();
     source.disabled = Boolean(controller);
     for (const input of [$("screenAddress"), $("screenPath"), $("screenCode")]) {
       input.parentElement.hidden = !http;
@@ -92,11 +100,16 @@
         const res = await fetch("/api/screen/frame", {
           method: "POST", signal: current.signal,
           headers: {"Content-Type":"application/json", "X-BoardBench":token},
-          body: JSON.stringify(source.value === "usb" ? {source:"usb", connection:session} :
+          body: JSON.stringify(isUsb() ? {source:source.value, connection:session} :
               source.value === "mcp" ? {source:"mcp"} : {address, code, path})
         });
-        if (source.value === "usb" && [409, 429].includes(res.status) && controller === current) {
+        if (isUsb() && [409, 429].includes(res.status) && controller === current) {
           $("screenStatus").textContent = "等待当前取帧或测试应答";
+          timer = setTimeout(next, 1200);
+          return;
+        }
+        if (res.status === 204 && controller === current) {
+          $("screenStatus").textContent = "等待设备推送下一帧";
           timer = setTimeout(next, 1200);
           return;
         }
@@ -113,7 +126,7 @@
         image.hidden = false;
         if (previous) URL.revokeObjectURL(previous);
         layout.classList.add("receiving");
-        $("screenDockHint").textContent = source.value === "usb" ? "USB 实时画面" : source.value === "mcp" ? "小智本地会话" : address;
+        $("screenDockHint").textContent = isUsb() ? "USB 屏幕画面" : source.value === "mcp" ? "小智本地会话" : address;
         $("screenEmpty").hidden = true;
         if ($("screenStatus").textContent !== "投影中") $("screenStatus").textContent = "投影中";
         $("screenMeta").textContent = probe.naturalWidth + " × " + probe.naturalHeight + " · " + new Date().toLocaleTimeString();

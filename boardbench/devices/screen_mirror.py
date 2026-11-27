@@ -116,11 +116,13 @@ def install(routes, capture_mcp=None, capture_usb=None):
             data = await req.json()
             if not isinstance(data, dict):
                 raise ValueError("投屏参数无效。")
-            if data.get("source") == "usb" and capture_usb:
+            if data.get("source") in ("usb", "usb-snap") and capture_usb:
                 if gate.locked():
                     return web.json_response({"error": "正在读取上一帧。"}, status=429)
                 async with gate:
-                    pixels = await capture_usb(data.get("connection"))
+                    pixels = await capture_usb(data.get("connection"), data["source"] == "usb-snap")
+                if pixels is None:
+                    return web.Response(status=204)
                 return web.Response(body=pixels, content_type="image/jpeg")
             if data.get("source") == "mcp":
                 if capture_mcp is None:
