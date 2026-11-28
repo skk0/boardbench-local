@@ -2,6 +2,7 @@
 
 import asyncio
 from collections import OrderedDict
+import ipaddress
 import json
 import re
 import secrets
@@ -23,11 +24,39 @@ SECRET_FIELD = re.compile(
 )
 KEY = re.compile(r"(?i)\b(?:sk-[a-z0-9_-]{8,}|bearer\s+[a-z0-9._~+/=-]+)")
 MAC = re.compile(r"(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b")
+UUID = re.compile(r"(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b")
+EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+IP = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+IDENT = re.compile(
+    r"""(?ix)(["']?(?:serial(?:_number)?|device[-_]id|client[-_]id|uuid)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^,;\s}]+)"""
+)
+URL = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+# Plain http is only for local model servers; anything else must use https.
+PRIVATE_NETS = [
+    ipaddress.ip_network(n)
+    for n in ("127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+]
 
 
 def scrub(text):
+    """The one redaction used for the AI snapshot, the preview and fault packs."""
     text = KEY.sub("[已遮盖]", str(text))
-    return MAC.sub("[设备标识]", SECRET_FIELD.sub(r"\1[已遮盖]", text))
+    text = MAC.sub("[设备标识]", SECRET_FIELD.sub(r"\1[已遮盖]", text))
+    text = IDENT.sub(r"\1[标识]", text)
+    text = URL.sub("[网址]", UUID.sub("[标识]", text))
+    return IP.sub("[地址]", EMAIL.sub("[邮箱]", text))
+
+
+def is_private_host(host):
+    host = host.lower().rstrip(".")
+    if host == "localhost" or host.endswith(".local"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    return any(ip in net for net in PRIVATE_NETS)
 
 
 def normalize(url):
@@ -44,6 +73,11 @@ def normalize(url):
     if any(c.isspace() for c in url) or len(url) > 2048:
         raise ValueError("接口地址格式有误。")
     _ = u.port
+    if u.scheme == "http" and not is_private_host(u.hostname):
+        raise ValueError(
+            "公网地址请使用 https://。http 会让 API Key 和日志明文经过网络；"
+            "仅本机和局域网（localhost、127.x、10.x、172.16–31.x、192.168.x、*.local）可用 http。"
+        )
     path = u.path.rstrip("/")
     if path.endswith("/chat/completions"):
         path = path[: -len("/chat/completions")]
@@ -127,6 +161,7 @@ class Analysis:
             return self.base, self.model, key
 
     async def call(self, base, key, suffix, payload=None):
+        base = normalize(base)  # settings saved by older versions are re-checked before the key is sent
         headers = {"Authorization": "Bearer " + key} if key else {}
         try:
             async with aiohttp.ClientSession(
@@ -242,7 +277,7 @@ class Analysis:
             dict(
                 ref="L" + str(x["id"]),
                 at=x["at"],
-                source=x["source"],
+                source=scrub(x["source"]),
                 level=x["level"],
                 text=scrub(x["message"])[:360],
             )

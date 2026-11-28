@@ -122,6 +122,35 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
             (await self.post("ai/analyze", ticket=p["ticket"])).status, 400
         )
 
+    async def test_preview_and_sent_snapshot_use_fault_pack_redaction(self):
+        await self.config()
+        secrets_in = [
+            "192.168.1.23",
+            "owner@example.com",
+            "https://example.com/a?x=1",
+            "12345678-1234-1234-1234-123456789abc",
+            "SN-998877",
+            "10.9.8.7",
+        ]
+        await self.post(
+            "note",
+            run=self.run,
+            text="ERR ip 192.168.1.23 mail owner@example.com url https://example.com/a?x=1 "
+            "uuid 12345678-1234-1234-1234-123456789abc serial=SN-998877",
+        )
+        p = await (
+            await self.post(
+                "ai/preview", run=self.run, focus="fault", question="为什么连不上 10.9.8.7？"
+            )
+        ).json()
+        self.assertIn("[地址]", str(p["snapshot"]["events"]))
+        await self.post("ai/analyze", ticket=p["ticket"])
+        sent = self.requests[0][1]["messages"][-1]["content"]
+        for text in (str(p), sent):
+            for value in secrets_in:
+                self.assertNotIn(value, text)
+        self.assertEqual(json.loads(sent), p["snapshot"])
+
     async def test_connection_and_key_binding(self):
         await self.config()
         self.assertEqual(await (await self.post("ai/models")).json(), ["local-test"])
@@ -201,6 +230,33 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(vault, {})
         finally:
             b.db.close()
+
+    def test_plain_http_only_for_loopback_and_lan(self):
+        for host in (
+            "localhost:11434", "127.0.0.1", "127.8.8.8:80", "[::1]:8000", "10.1.2.3",
+            "172.16.0.9", "172.31.255.1", "192.168.1.5:1234", "ollama.local",
+        ):
+            self.assertEqual(normalize(f"http://{host}/v1/"), f"http://{host}/v1")
+        for host in (
+            "example.com", "8.8.8.8", "172.32.0.1", "172.15.0.1", "192.169.0.1",
+            "11.0.0.1", "localhost.example.com", "2130706433", "[2001:db8::1]",
+        ):
+            with self.assertRaisesRegex(ValueError, "https"):
+                normalize(f"http://{host}/v1")
+        self.assertEqual(normalize("https://api.example.com/v1/"), "https://api.example.com/v1")
+
+    async def test_public_http_never_receives_the_key(self):
+        r = await self.post(
+            "ai/settings", base="http://api.example.com/v1", model="m", key="fixture-only", remember=False
+        )
+        self.assertEqual(r.status, 400)
+        self.assertIn("https", await r.text())
+        # A base saved by an older version must be rejected before any request is made.
+        ai = Analysis(Bench(":memory:"))
+        with patch("aiohttp.ClientSession") as session:
+            with self.assertRaisesRegex(ValueError, "https"):
+                await ai.call("http://api.example.com/v1", "fixture-only", "/models")
+        session.assert_not_called()
 
     def test_url_and_unstructured_reply(self):
         self.assertEqual(normalize(self.base + "/chat/completions/"), self.base)

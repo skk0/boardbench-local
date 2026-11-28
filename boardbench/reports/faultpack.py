@@ -12,19 +12,10 @@ from boardbench.reports.replay import annotate
 
 FORMAT = "boardbench-fault-v1"
 LIMIT = 524288
-UUID = re.compile(r"(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b")
-EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
-IP = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-IDENT = re.compile(
-    r"""(?ix)(["']?(?:serial(?:_number)?|device[-_]id|client[-_]id|uuid)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^,;\s}]+)"""
-)
-URL = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 
 
 def clean(value, limit=480):
-    value = IDENT.sub(r"\1[标识]", scrub(value))
-    value = URL.sub("[网址]", UUID.sub("[标识]", value))
-    return IP.sub("[地址]", EMAIL.sub("[邮箱]", value))[:limit]
+    return scrub(value)[:limit]
 
 
 def install(db):
