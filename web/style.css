@@ -1330,3 +1330,5 @@ dialog pre {
 .app-update button { justify-self: start; min-height: 44px; }
 .app-update progress { width: 100%; accent-color: var(--accent); }
 .app-update pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+#appUpdate.update-ready { font-weight: 650; border-color: var(--active); background: var(--soft); }

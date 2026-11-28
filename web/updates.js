@@ -2,7 +2,7 @@
 (() => {
   const trigger = $("appUpdate");
   const labels = {
-    idle: "检查更新", checking: "正在检查…", current: "重新检查", available: "下载更新",
+    idle: "检查更新", checking: "正在检查…", current: "重新检查", available: "重新下载",
     downloading: "正在下载…", verifying: "正在校验…", ready: "立即重启更新",
     restarting: "正在重启…", error: "重试检查",
   };
@@ -11,6 +11,7 @@
   function paint(s) {
     snapshot = s;
     trigger.hidden = false;
+    trigger.classList.toggle("update-ready", s.phase === "ready");
     trigger.textContent = s.phase === "ready" ? "新版已就绪" : s.phase === "available" ? "有新版本" : "软件更新";
     if (!body?.isConnected || !$("dialog").open) return;
     const pct = s.size ? Math.min(100, Math.floor(100 * s.received / s.size)) : 0;

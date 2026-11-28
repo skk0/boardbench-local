@@ -4,7 +4,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
@@ -64,6 +64,21 @@ class UpdateServiceTests(unittest.IsolatedAsyncioTestCase):
             async with TestClient(TestServer(make_app(Path(temp), False))) as client:
                 self.assertIsNone((await (await client.get("/api/setup")).json())["desktop_update"])
                 self.assertEqual((await client.get("/api/update")).status, 404)
+
+    async def test_new_release_background_download(self):
+        metadata = release()
+        async def latest(req):
+            return web.json_response(metadata)
+        service = web.Application()
+        service.router.add_get("/release", latest)
+        async with TestServer(service) as remote:
+            with patch.object(updates, "LATEST", str(remote.make_url("/release"))):
+                updater = updates.Updater(Path("BoardBench.exe"), "Windows-x64")
+                with patch.object(updater, "_download", new_callable=AsyncMock) as download:
+                    updater.start("check")
+                    await updater.task
+                    self.assertEqual(updater.phase, "ready", updater.error)
+                    download.assert_awaited_once()
 
     async def test_download_verification_and_retry(self):
         buf = io.BytesIO()

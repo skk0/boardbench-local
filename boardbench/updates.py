@@ -126,8 +126,9 @@ def prepare(archive, stage, target, mac):
 
 
 class Updater:
-    def __init__(self, target, platform_name):
+    def __init__(self, target, platform_name, directory=None):
         self.target, self.platform = target, platform_name
+        self.cache = directory / f"pending-{platform_name}.zip" if directory else None
         self.phase = "idle"
         self.error = ""
         self.received = 0
@@ -157,10 +158,15 @@ class Updater:
                     async with client.get(LATEST, allow_redirects=False) as response:
                         response.raise_for_status()
                         self.release = select_release(await response.json(), self.platform)
-                    self.phase = "available" if self.release else "current"
-                else:
-                    await self._download(client)
-                    self.phase = "ready"
+                    if not self.release:
+                        self.phase = "current"
+                        if self.cache:
+                            self.cache.unlink(missing_ok=True)
+                        return
+                action = "download"
+                self.phase = "downloading"
+                await self._download(client)
+                self.phase = "ready"
         except Exception as exc:
             self.discard()
             detail = f"HTTP {exc.status}" if isinstance(exc, aiohttp.ClientResponseError) else str(exc) or type(exc).__name__
@@ -175,6 +181,13 @@ class Updater:
         self.received = 0
         digest = hashlib.sha256()
         rel = self.release
+        if self.cache and self.cache.is_file() and self.cache.stat().st_size == rel["size"]:
+            with self.cache.open("rb") as stream:
+                if hashlib.file_digest(stream, "sha256").hexdigest() == rel["digest"]:
+                    self.received = rel["size"]
+                    self.phase = "verifying"
+                    await asyncio.to_thread(prepare, self.cache, self.stage, self.target, self.platform.startswith("macOS"))
+                    return
         async with open_asset(client, rel["url"]) as response:
             response.raise_for_status()
             with archive.open("xb") as output:
@@ -188,6 +201,20 @@ class Updater:
             raise ValueError("安装包的长度或 SHA-256 与发布记录不符。")
         self.phase = "verifying"
         await asyncio.to_thread(prepare, archive, self.stage, self.target, self.platform.startswith("macOS"))
+        if self.cache:
+            # Atomic even when the user's data lives on a different volume.
+            tmp = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=self.cache.parent, delete=False) as cached:
+                    tmp = Path(cached.name)
+                    with archive.open("rb") as stream:
+                        shutil.copyfileobj(stream, cached)
+                os.replace(tmp, self.cache)
+            except OSError:
+                pass  # The staged installation is still usable without a cache.
+            finally:
+                if tmp:
+                    tmp.unlink(missing_ok=True)
         archive.unlink()
 
     def discard(self):

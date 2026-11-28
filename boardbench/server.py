@@ -43,7 +43,7 @@ def make_app(directory, monitor_usb=True, close_window=None, port=8765):
     faultpack.install(bench.db)
 
     target = installation() if close_window else None
-    updater = Updater(*target) if target else None
+    updater = Updater(*target, directory=directory) if target else None
 
     @web.middleware
     async def policy(req, handler):
