@@ -140,6 +140,7 @@ def make_app(directory, monitor_usb=True, close_window=None, port=8765):
                 job=bench.taskname,
                 suite=suite.state(),
                 storage_hold=bench.storage_hold,
+                chip_probe_status=bench.chip_probe_status,
                 device_identity=bench.device_identity if bench.ser else {},
                 components=bench.components.states(bench.profile, bool(bench.ser)),
                 auto_usb=auto.enabled,
@@ -422,6 +423,14 @@ def make_app(directory, monitor_usb=True, close_window=None, port=8765):
                 bench.start("刷固件 · 恢复备份", lambda: flash.restore(d["port"], d["backup"]))
             elif op == "flash-close":
                 flash.close()
+            elif op == "identify-mcu":
+                if (not bench.ser or bench.transport != "串口" or d.get("port") != bench.usb
+                        or d.get("connection_id") != bench.connection_id):
+                    raise ValueError("请先连接要识别的 USB 串口，再点击识别主控。")
+                if bench.endurance.active or (suite.state() or {}).get("status") == "运行中" or echo.runner:
+                    raise ValueError("请先结束当前测试，再识别主控。")
+                port = bench.usb
+                bench.start("识别主控", lambda: bench.identify_mcu(port))
             elif op == "probe":
                 port = d["port"]
                 bench.select(port)

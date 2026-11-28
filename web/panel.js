@@ -152,6 +152,8 @@ function buttons() {
     $("baud").disabled =
     $("framing").disabled =
       connected || job || Boolean(connectionPending);
+  $("identifyMcu").disabled = !connected || net || job || Boolean(connectionPending) ||
+    Boolean(state.endurance || state.echo || state.suite?.status === "运行中");
   $("probe").disabled = $("backup").disabled = net || !port || job || Boolean(connectionPending);
   $("stop").disabled = !job;
   $("all").disabled =
@@ -486,6 +488,11 @@ bind("connect", async () => {
   }
 });
 bind("new", () => act("new", { profile: $("profile").value }));
+bind("identifyMcu", async () => {
+  if ($("identifyMcu").disabled) return;
+  $("identifyMcu").disabled = true;
+  await act("identify-mcu", {port: state.port, connection_id: state.connection_id});
+});
 bind("probe", () => {
   const body = modal("读芯片型号和闪存");
   body.append(

@@ -216,11 +216,16 @@
                 <h2>板子上各个部件的状态</h2>
                 <button id="openSmart" class="text-link">做一次自动体检 →</button>
               </div>
-              <p class="explain"><b>这是什么：</b>连上板子后，这里只“听”板子自己说的话，不会给它发任何东西。板子报告了哪个部件（屏幕、Wi-Fi、喇叭…），就列出哪个。
+              <p class="explain"><b>这是什么：</b>连上后默认监听板子的输出。板子报告了哪个部件（屏幕、Wi-Fi、喇叭…），就列出哪个。
                 <b>该怎么看：</b>绿色“有读数 / 有应答”是正常；红色是板子自己报了错；“未上报”只表示固件没说，不代表坏了。点部件名能看它的原始记录。</p>
               <div class="monitor-summary">
                 <strong id="monitorInfo"></strong>
                 <div id="deviceIdentity" class="row" aria-label="设备上报的标识" hidden></div>
+                <div class="row">
+                  <button id="identifyMcu" disabled aria-describedby="identifyMcuHint">识别主控</button>
+                  <small id="identifyMcuHint">通过 USB 读取 ESP 系列主控。点击会重启板子，固件保留。</small>
+                </div>
+                <p id="mcuResult" role="status"></p>
                 <p id="monitorHelp" hidden></p>
               </div>
               <div class="monitor-toolbar">

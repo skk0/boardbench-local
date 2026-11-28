@@ -73,12 +73,12 @@ const renderOverview = (() => {
     else if (!live.connected) {
       reason = !live.auto_usb ? "USB 自动连接已关闭，可在「板子状态」开启或手动连接。" :
         live.job ? "设备任务进行中，等待串口可用。" : live.usb_message || "等待 USB 串口。";
-    } else if (model) reason = model.source;
+    } else if (model) reason = [model.source, fields.chip && "主控 " + fields.chip.value].filter(Boolean).join(" · ");
     else if (fields.chip) reason = "已识别芯片 " + fields.chip.value + "，当前日志尚未报告整板型号。";
     else if (fields.bridge) reason = "已识别 USB 转串口 " + fields.bridge.value + "，尚无整板型号证据。";
     else if (!live.connection_rx) reason = "已连接 " + live.port + "，本次连接尚未收到数据。";
     else reason = "已收到设备数据，尚未读到可识别的板型声明。";
-    const title = model?.value || (live?.connected ? "待识别" : live ? "未连接" : "暂不可用");
+    const title = model?.value || (live?.connected ? "未知" : live ? "未连接" : "暂不可用");
     if (idx("Model").textContent !== title) idx("Model").textContent = title;
     if (idx("ModelReason").textContent !== reason) idx("ModelReason").textContent = reason;
     const evidence = model || fields.chip || fields.bridge;

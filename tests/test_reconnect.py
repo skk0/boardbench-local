@@ -238,3 +238,48 @@ class ReconnectLoopTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ChipProbeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_active_probe_restores_monitor_and_keeps_board_separate(self):
+        from unittest.mock import AsyncMock
+        for chip in ("ESP32-S3", "ESP32-C3", None):
+            with self.subTest(chip=chip):
+                b = Bench(":memory:")
+                FakeSerial.board, FakeSerial.windows = FakeBoard(), False
+                FakeSerial.board.output.clear()
+                reader = AsyncMock(return_value=chip, side_effect=None if chip else ValueError("无 ROM 应答"))
+                with (patch.object(Bench, "ports", return_value=[DEVICE]),
+                      patch("boardbench.bench.serial.Serial", FakeSerial),
+                      patch("boardbench.bench.read_chip", reader)):
+                    try:
+                        b.connect(PORT, 57600, "8E1")
+                        run = b.run
+                        b.start("识别主控", lambda: b.identify_mcu(PORT))
+                        await b.job
+                        reader.assert_awaited_once_with(PORT)
+                        self.assertTrue(b.ser)
+                        self.assertEqual((b.run, b.baud, b.framing), (run, 57600, "8E1"))
+                        self.assertNotIn("board", b.device_identity)
+                        if chip:
+                            entry = b.device_identity["chip"]
+                            self.assertEqual(entry["value"], chip)
+                            self.assertIn(chip, b.db.execute("SELECT message FROM logs WHERE id=?", (entry["log_id"],)).fetchone()[0])
+                        else:
+                            self.assertNotIn("chip", b.device_identity)
+                            self.assertIn("无 ROM 应答", b.chip_probe_status)
+                        await b.disconnect()
+                        b.connect(PORT, 115200)
+                        self.assertNotIn("chip", b.device_identity)
+                        self.assertFalse(b.chip_probe_status)
+                    finally:
+                        await b.disconnect()
+                        b.db.close()
+
+    def test_worker_only_detects_and_resets(self):
+        from unittest.mock import Mock, call
+        from boardbench.devices.chip_probe import detect
+        rom = Mock(CHIP_NAME="ESP32-S3")
+        with patch("boardbench.devices.chip_probe.detect_chip", return_value=rom) as detect_chip:
+            self.assertEqual(detect(PORT), "ESP32-S3")
+            detect_chip.assert_called_once_with(PORT, baud=115200, connect_attempts=2)
+        self.assertEqual(rom.mock_calls, [call.hard_reset(), call._port.close()])

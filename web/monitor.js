@@ -68,6 +68,9 @@ function renderComponents() {
     $("componentRows").replaceChildren();
   }
   const identity = state.device_identity || {};
+  const result = state.job === "识别主控" ? "正在读取 ESP ROM，日志监听暂时停用…" :
+    [state.chip_probe_status, state.connected ? "具体板型 · " + (identity.board?.value || "未知") : ""].filter(Boolean).join("　");
+  if ($("mcuResult").textContent !== result) $("mcuResult").textContent = result;
   const identityBox = $("deviceIdentity");
   const identityKey = JSON.stringify([scope, identity]);
   if (identityBox.dataset.key !== identityKey) {

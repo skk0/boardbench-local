@@ -22,6 +22,7 @@ import serial
 from serial.tools import list_ports
 from boardbench.devices.usb_screen import SerialReplyFilter, UsbScreen
 from boardbench.checks.smart import evaluate
+from boardbench.devices.chip_probe import read_chip
 from boardbench.devices.device_identity import usb_model
 from boardbench.devices.monitor import Components, RESET_WINDOW
 from boardbench.checks.endurance import Endurance
@@ -210,6 +211,7 @@ class Bench:
         self.profile = profile
         if not keep_connection or not self.ser:
             self.usb_identification = None
+        self.chip_probe_status = ""
         self.usb_fields.clear()
         self.components.use_profile(profile)
         self.run = self.db.execute(
@@ -226,7 +228,10 @@ class Bench:
 
     @property
     def device_identity(self):
-        return {**self.usb_fields, **self.components.identity}
+        fields = {**self.usb_fields, **self.components.identity}
+        if "chip" in self.usb_fields:
+            fields["chip"] = self.usb_fields["chip"]
+        return fields
 
     def record_usb_identity(self):
         self.usb_fields.clear()
@@ -249,6 +254,8 @@ class Bench:
         for key, label in (("board", "USB 板型标识"), ("bridge", "USB 转串口")):
             if entry := self.usb_fields.get(key):
                 settings[label] = entry["value"]
+        if "chip" in self.usb_fields:
+            settings["主控（ESP ROM）"] = self.usb_fields["chip"]["value"]
         if settings != self.capture_key:
             self.db.execute("INSERT OR REPLACE INTO capture_info VALUES(?,?)",
                             (self.run,json.dumps(settings,ensure_ascii=False)))
@@ -384,6 +391,9 @@ class Bench:
     def connect(self, port, baud, framing="8N1"):
         if self.ser or self.job:
             raise ValueError("已经连着板子，或者有任务正在进行。")
+        self._open_monitor(port, baud, framing)
+
+    def _open_monitor(self, port, baud, framing):
         self.check_space()
         device = self.select(port)
         if not 300 <= baud <= 4000000:
@@ -408,6 +418,7 @@ class Bench:
         self.connection_rx = 0
         self.components.reset()
         self.usb_screen.reset()
+        self.chip_probe_status = ""
         self.ser = handle
         self.connection_id += 1
         self.transport = "串口"
@@ -435,6 +446,7 @@ class Bench:
         self.ser = await NetworkPort.connect(host, port, transport)
         self.usb_identification = None
         self.usb_fields.clear()
+        self.chip_probe_status = ""
         self.connection_id += 1
         self.transport = transport
         self.network_host = host
@@ -529,6 +541,7 @@ class Bench:
                     future.set_result(detail)
 
     def close_port(self):
+        self.chip_probe_status = ""
         self.usb_screen.reset()
         self.endurance.stop("连接中断")
         if self.ser:
@@ -691,6 +704,39 @@ class Bench:
                     process.kill()
                 await process.wait()
             partial.unlink(missing_ok=True)
+
+    async def identify_mcu(self, port):
+        original = self.select(port)
+        baud, framing = self.baud, self.framing
+        model = None
+        status = "识别已取消"
+        try:
+            await self.disconnect()
+            model = await read_chip(port)
+            status = f"主控 · {model}（ESP ROM 读取）"
+        except (ValueError, OSError) as exc:
+            status = f"主控未知 · {exc}"
+        finally:
+            evidence = self.log("INFO" if model else "WARN", "设备识别", status)
+            try:
+                # Native USB can disappear briefly while the ROM resets into the application.
+                for attempt in range(8):
+                    current = next((p for p in self.ports() if p["path"] == port), None)
+                    if current or attempt == 7:
+                        break
+                    await asyncio.sleep(0.25)
+                if current is None:
+                    raise ValueError("原 USB 端口已消失，请重新连接。")
+                if any(current.get(k) != original.get(k) for k in ("vid", "pid", "serial")):
+                    raise ValueError("USB 设备标识已改变，请重新选择设备。")
+                self._open_monitor(port, baud, framing)
+                if model:
+                    self.usb_fields["chip"] = dict(value=model, source="ESP ROM 读取", log_id=evidence)
+                    self.capture_settings()
+            except (ValueError, OSError) as exc:
+                status += " · 未恢复串口监听：" + str(exc)
+                self.log("WARN", "串口", status)
+            self.chip_probe_status = status
 
     async def probe(self, port):
         await self.disconnect()
