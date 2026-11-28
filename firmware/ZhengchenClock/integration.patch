@@ -1,5 +1,5 @@
 diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
-index 45204d6..5e7b1c3 100644
+index 45204d6..6b57c35 100644
 --- a/main/CMakeLists.txt
 +++ b/main/CMakeLists.txt
 @@ -859,12 +859,12 @@ elseif(CONFIG_BOARD_TYPE_ZHENGCHEN_1_54TFT_ML307)
@@ -26,7 +26,7 @@ index 45204d6..5e7b1c3 100644
 +    list(APPEND SOURCES
 +        "${CLOCK_UI_DIR}/desk_display.cc" "${CLOCK_UI_DIR}/desk_face.cc"
 +        "${CLOCK_UI_DIR}/desk_weather.cc" "${CLOCK_UI_DIR}/desk_weather_data.cc"
-+        "${CLOCK_UI_DIR}/desk_digits.c" "${CLOCK_UI_DIR}/desk_mirror.cc")
++        "${CLOCK_UI_DIR}/desk_digits.c" "${CLOCK_UI_DIR}/desk_mirror.cc" "${CLOCK_UI_DIR}/desk_volume_keys.cc")
 +endif()
  
  # Select one audio engine for each chip family
@@ -80,29 +80,60 @@ index 0f7f073..2785453 100644
          "设置AEC对话打断模式。当用户意图切换对话打断模式时或者用户觉得ai对话容易被打断时或者用户觉得无法实现对话打断时都使用此工具。\n"
          "参数：\n"
 diff --git a/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc b/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
-index 2c2250e..96fad05 100644
+index 2c2250e..730c83c 100644
 --- a/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
 +++ b/main/boards/zhengchen/cam-ml307/zhengchen_cam_board_ml307.cc
-@@ -1,7 +1,8 @@
+@@ -1,7 +1,9 @@
  #include "dual_network_board.h"
  #include "audio/codecs/box_audio_codec.h"
 -#include "display/lcd_display.h"
 +#include "../cam/desk_display.h"
  #include "application.h"
 +#include "../cam/desk_mirror.h"
++#include "../cam/desk_volume_keys.h"
  #include "button.h"
  #include "led/single_led.h"
  #include "config.h"
-@@ -173,6 +174,8 @@ private:
-             
+@@ -162,36 +164,8 @@ private:
+             }
          });
  
-+        volume_up_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
-+
-         volume_up_button_.OnLongPress([this]() {
-             GetAudioCodec()->SetOutputVolume(100);
-             GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
-@@ -230,7 +233,7 @@ private:
+-        volume_up_button_.OnClick([this]() {
+-            auto codec = GetAudioCodec();
+-            auto volume = codec->output_volume() + 10;
+-            if (volume > 100) {
+-                volume = 100;
+-            }
+-            GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume/10));
+-            codec->SetOutputVolume(volume);
+-            
+-        });
+-
+-        volume_up_button_.OnLongPress([this]() {
+-            GetAudioCodec()->SetOutputVolume(100);
+-            GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+-        });
+-
+-        volume_down_button_.OnClick([this]() {
+-            auto codec = GetAudioCodec();
+-            auto volume = codec->output_volume() - 10;
+-            if (volume < 0) {
+-                volume = 0;
+-            }
+-            codec->SetOutputVolume(volume);
+-            GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume/10));
+-        });
+-
+-        volume_down_button_.OnLongPress([this]() {
+-            GetAudioCodec()->SetOutputVolume(0);
+-            GetDisplay()->ShowNotification(Lang::Strings::MUTED);
+-        });
++        boot_button_.OnMultipleClick([]() { ToggleDeskMirror(); }, 3);
++        BindDeskVolumeKeys(volume_up_button_, volume_down_button_);
+     }
+ 
+     void InitializeSt7789Display() {
+@@ -230,7 +204,7 @@ private:
              // 横屏模式
              esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
              esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
@@ -111,7 +142,7 @@ index 2c2250e..96fad05 100644
                                          DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
  
          } else {
-@@ -311,6 +314,18 @@ public:
+@@ -311,6 +285,18 @@ public:
          return &led;
      }
  
@@ -161,29 +192,60 @@ index 0f7f073..25f2942 100644
          "设置AEC对话打断模式。当用户意图切换对话打断模式时或者用户觉得ai对话容易被打断时或者用户觉得无法实现对话打断时都使用此工具。\n"
          "参数：\n"
 diff --git a/main/boards/zhengchen/cam/zhengchen_cam_board.cc b/main/boards/zhengchen/cam/zhengchen_cam_board.cc
-index 8cc28ec..e87269c 100644
+index 8cc28ec..7c591ab 100644
 --- a/main/boards/zhengchen/cam/zhengchen_cam_board.cc
 +++ b/main/boards/zhengchen/cam/zhengchen_cam_board.cc
-@@ -1,7 +1,8 @@
+@@ -1,7 +1,9 @@
  #include "wifi_board.h"
  #include "audio/codecs/box_audio_codec.h"
 -#include "display/lcd_display.h"
 +#include "desk_display.h"
  #include "application.h"
 +#include "../cam/desk_mirror.h"
++#include "../cam/desk_volume_keys.h"
  #include "button.h"
  #include "led/single_led.h"
  #include "config.h"
-@@ -167,6 +168,8 @@ private:
-             
+@@ -156,36 +158,8 @@ private:
+             EnterWifiConfigMode();
          });
  
-+        volume_up_button_.OnDoubleClick([]() { ToggleDeskMirror(); });
-+
-         volume_up_button_.OnLongPress([this]() {
-             GetAudioCodec()->SetOutputVolume(100);
-             GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
-@@ -224,7 +227,7 @@ private:
+-        volume_up_button_.OnClick([this]() {
+-            auto codec = GetAudioCodec();
+-            auto volume = codec->output_volume() + 10;
+-            if (volume > 100) {
+-                volume = 100;
+-            }
+-            GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume/10));
+-            codec->SetOutputVolume(volume);
+-            
+-        });
+-
+-        volume_up_button_.OnLongPress([this]() {
+-            GetAudioCodec()->SetOutputVolume(100);
+-            GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+-        });
+-
+-        volume_down_button_.OnClick([this]() {
+-            auto codec = GetAudioCodec();
+-            auto volume = codec->output_volume() - 10;
+-            if (volume < 0) {
+-                volume = 0;
+-            }
+-            codec->SetOutputVolume(volume);
+-            GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume/10));
+-        });
+-
+-        volume_down_button_.OnLongPress([this]() {
+-            GetAudioCodec()->SetOutputVolume(0);
+-            GetDisplay()->ShowNotification(Lang::Strings::MUTED);
+-        });
++        boot_button_.OnMultipleClick([]() { ToggleDeskMirror(); }, 3);
++        BindDeskVolumeKeys(volume_up_button_, volume_down_button_);
+     }
+ 
+     void InitializeSt7789Display() {
+@@ -224,7 +198,7 @@ private:
              // 横屏模式
              esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
              esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
@@ -192,7 +254,7 @@ index 8cc28ec..e87269c 100644
                                          DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
  
          } else {
-@@ -304,6 +307,18 @@ public:
+@@ -304,6 +278,18 @@ public:
          return &led;
      }
  
