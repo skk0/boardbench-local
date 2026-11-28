@@ -31,7 +31,8 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             patch.object(self.b, "connect") as connect,
         ):
             await self.auto.check()
-            connect.assert_not_called()
+            connect.assert_called_once_with("COM7", 115200, "8N1")
+            connect.reset_mock()
             self.auto.remember(first["path"], 57600, "8E1")
             ports.return_value = [dict(first, path="COM9")]
             await self.auto.check()
@@ -46,7 +47,8 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             ports.return_value = [unknown]
             self.auto.remember("COM8", 115200, "8N1")
             await self.auto.check()
-            connect.assert_not_called()
+            connect.assert_called_once_with("COM8", 115200, "8N1")
+            self.assertEqual(len(self.auto.known()), 1)
 
     async def test_telemetry_stale_disconnect_and_log_index(self):
         self.b.new("正点原子 · DNESP32S3B BOX")

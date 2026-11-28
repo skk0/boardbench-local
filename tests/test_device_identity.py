@@ -19,6 +19,17 @@ class DeviceIdentityTests(unittest.TestCase):
                           "MicroPython v1.2 on 2025-01-01; " + "x" * 500):
             self.assertIsNone(identify(unrelated))
 
+    def test_board_declarations_on_late_attach(self):
+        b = Bench(":memory:")
+        self.addCleanup(b.db.close)
+        sku = "I (125) Board: UUID=00000000-0000-4000-8000-000000000001 SKU=zhengchen/cam"
+        self.assertEqual(identify(sku)[1]["board"], "zhengchen/cam")
+        b.log("RX", "串口", "BoardBenchProbe ready")
+        b.log("RX", "串口", "BoardBenchProbe board: ATK-DNESP32S3B BOX")
+        self.assertEqual(b.components.identity["board"]["value"], "ATK-DNESP32S3B BOX")
+        self.assertEqual(b.components.identity["firmware"]["value"], "BoardBenchProbe")
+        self.assertIsNone(identify("USB-SERIAL CH340 (COM5)"))
+
     def test_late_join_and_rom_restart(self):
         b = Bench(":memory:")
         self.addCleanup(b.db.close)

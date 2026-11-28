@@ -89,7 +89,7 @@ function renderComponents() {
   const seen = records.filter((x) => x.log_id).length;
   $("emptyParts").hidden = records.length > 0 && (!$("onlyReported").checked || seen > 0);
   $("monitorInfo").textContent =
-    state.profile + " · " + seen + " 个部件有报告";
+    "测试清单 · " + state.profile + " · " + seen + " 个部件有报告";
   $("monitorHelp").hidden = !(state.connected && seen);
   $("monitorHelp").textContent = "点部件名能看它的记录。";
   $("emptyParts").textContent = state.connected

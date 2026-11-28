@@ -131,6 +131,7 @@ static void telemetryTick() {
   static uint32_t lastCapabilities=0;
   if(!lastCapabilities || now-lastCapabilities>=6000) {
     lastCapabilities=now;
+    Serial.println("BoardBenchProbe board: ATK-DNESP32S3B BOX");
     event("mic","unavailable","microphone PCM driver not active in this monitor build");
     event("light","unavailable","no verified ambient sensor driver in this board profile");
     event("sd","unavailable","TF bus not mounted by this monitor");

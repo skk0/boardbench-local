@@ -118,6 +118,8 @@ def run_window(port, make_service, smoke=False, receipt=None):
                             window.evaluate_js("document.querySelector('[data-tab=overview]').click()")
                             if not window.evaluate_js(
                                 "document.querySelector('#ovParts p')?.textContent === '没有符合条件的部件。' && "
+                                "document.querySelector('#ovModel')?.textContent === '未连接' && "
+                                "document.querySelector('#ovBoardInfo').textContent.includes('测试清单') && "
                                 "document.querySelectorAll('#ovParts button').length === 0 && "
                                 "document.querySelector('#ovCoverage strong').textContent === '—'"
                             ):

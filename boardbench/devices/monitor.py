@@ -9,6 +9,8 @@ from boardbench.devices.device_identity import identify
 from boardbench.checks.smart import key_cycles
 
 RESET_WINDOW = 5    # seconds after opening in which a vanished port or ROM banner means "we reset it"
+USB_BRIDGES = {(0x303A, 0x1001), (0x10C4, 0xEA60), (0x1A86, 0x7523),
+               (0x1A86, 0x55D4), (0x1A86, 0x55D3), (0x0403, 0x6001)}
 MAX_RESETS = 3      # drops right after opening before auto-connect gives up on a device
 STABLE_AFTER = 10   # seconds a connection must survive to clear earlier drops
 
@@ -184,7 +186,7 @@ class Components:
             source, fields = identity
             # A new startup banner supersedes earlier application declarations.
             rom_chip = self.identity.get("chip", {})
-            if source not in ("ESP-IDF 应用信息", "小智格式的板型声明"):
+            if source not in ("ESP-IDF 应用信息", "小智格式的板型声明", "诊断固件板型声明"):
                 self.identity.clear()
             if "chip" not in fields and rom_chip.get("source") == "ROM 启动标识":
                 self.identity["chip"] = rom_chip
@@ -281,6 +283,7 @@ class AutoUSB:
         self.db.commit()
         self.online = []
         self.previous_paths = None
+        self.inserted = set()
         self.next_try = {}
         self.current_key = None
         self.resets = 0
@@ -368,6 +371,8 @@ class AutoUSB:
         self.online = ports
         paths = {p["path"] for p in ports}
         added = paths - self.previous_paths if self.previous_paths is not None else set()
+        self.inserted.intersection_update(paths)
+        self.inserted.update(added)
         self.previous_paths = paths
         self.ignored.intersection_update(paths)
         async with self.lock:
@@ -380,19 +385,28 @@ class AutoUSB:
             saved = {r["identity"]: r for r in self.known()}
             matches = [(p, saved[ident]) for p in ports
                        if (ident := json.dumps(self.identity(p))) in saved]
-            # A unique, newly inserted USB serial interface can be listened to once.
-            # Already-present or ambiguous devices still require explicit selection.
-            if not matches and len(ports) == 1 and ports[0]["path"] in added:
-                device = ports[0]
-                identity = self.identity(device)
-                if identity and (device["vid"], device["pid"]) in {
-                    (0x303A, 0x1001), (0x10C4, 0xEA60), (0x1A86, 0x7523), (0x1A86, 0x55D4),
-                    (0x1A86, 0x55D3), (0x0403, 0x6001),
-                }:
-                    matches = [(device, dict(identity=json.dumps(identity), baud=115200, framing="8N1"))]
-            if len(matches) != 1:
-                self.message = ("插着好几块记住的板子，请自己选一个连接" if matches else
-                                "第一次用：在上面选好板子的 USB 端口，点“连接”" if ports else "等你插上记住的板子")
+            if not matches:
+                usb = [p for p in ports if p.get("vid") is not None]
+                # Unrelated OS pseudo-ports must not prevent detecting a USB insertion.
+                if len(usb) == 1:
+                    device = usb[0]
+                    ident = self.identity(device)
+                    if ((device["vid"], device["pid"]) in USB_BRIDGES
+                            and (ident or device["path"] in self.inserted)):
+                        key = json.dumps(ident) if ident else "port:" + device["path"]
+                        matches = [(device, dict(identity=key, baud=115200, framing="8N1"))]
+                if not matches:
+                    if len(usb) > 1:
+                        self.message = "发现多个 USB 串口，请在「板子状态」选择要识别的端口。"
+                    elif usb:
+                        self.message = "该 USB 端口缺少可自动匹配的标识，请在「板子状态」选择端口。"
+                    elif ports:
+                        self.message = "未发现可自动识别的 USB 串口，可在「板子状态」查看端口。"
+                    else:
+                        self.message = "尚未发现 USB 串口，请插入板子的 USB 数据线。"
+                    return
+            if len(matches) > 1:
+                self.message = "发现多个匹配的 USB 串口，请在「板子状态」选择要识别的端口。"
                 return
             device, settings = matches[0]
             path = device["path"]
@@ -404,7 +418,7 @@ class AutoUSB:
             if time.monotonic() < self.next_try.get(path, 0):
                 return
             try:
-                same = self.current_key == settings["identity"]
+                same = self.identity(device) is not None and self.current_key == settings["identity"]
                 profile = self.b.profile if same else "通用串口设备"
                 # The same board coming back (e.g. after a reset) keeps its session.
                 if (self.b.usb and not (same and self.b.usb == path)) or profile != self.b.profile:
@@ -412,7 +426,7 @@ class AutoUSB:
                 self.b.connect(path, settings["baud"], settings["framing"])
                 self.current_key = settings["identity"]
                 self.message = "已自动连上 " + path
-                self.b.log("INFO", "USB", "已按 USB 标识重新连接，只接收板子的输出。")
+                self.b.log("INFO", "USB", "已自动打开 USB 串口，正在监听设备输出。")
             except (ValueError, OSError) as exc:
                 self.next_try[path] = time.monotonic() + 15
                 self.message = "没连上（" + str(exc)[:60] + "），15 秒后再试"

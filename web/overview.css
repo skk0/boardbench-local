@@ -38,3 +38,8 @@ body:has(#overview:not([hidden])) .grid > .panel:first-child { background: trans
 .ov-format {margin-top:14px;color:var(--sub);font-size:13px;}
 .ov-format summary {cursor:pointer;}
 .ov-format pre {white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 var(--mono);}
+
+.ov-identity { margin-bottom:12px; display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; }
+.ov-identity h3 { color:var(--sub); }
+.ov-identity strong { font-size:18px; overflow-wrap:anywhere; }
+.ov-identity p { margin:0; }

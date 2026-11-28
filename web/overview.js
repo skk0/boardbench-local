@@ -8,6 +8,11 @@ const renderOverview = (() => {
       <div class="ov-actions"><span id="ovStatus" class="ov-status"></span><button id="ovConnect">去连接板子</button></div>
     </div>
     <div id="ovBoard">
+      <section class="ov-card ov-identity" aria-labelledby="ovIdentityLabel">
+        <h3 id="ovIdentityLabel">实际板型</h3>
+        <div role="status"><strong id="ovModel"></strong><p id="ovModelReason"></p></div>
+        <button type="button" id="ovModelLog" class="text-link" hidden></button>
+      </section>
       <div id="ovStats" class="ov-grid"></div>
       <div class="ov-details">
         <section class="ov-card"><h3>清单里有多少部件报告了</h3><div id="ovCoverage" class="ov-ring"><strong></strong></div><dl id="ovBoardInfo" class="ov-list"></dl></section>
@@ -60,10 +65,35 @@ const renderOverview = (() => {
       return card;
     }));
   }
+  function identity() {
+    const fields = live?.connected ? live.device_identity || {} : {};
+    const model = fields.board;
+    let reason;
+    if (!live) reason = "暂时无法读取连接状态。";
+    else if (!live.connected) {
+      reason = !live.auto_usb ? "USB 自动连接已关闭，可在「板子状态」开启或手动连接。" :
+        live.job ? "设备任务进行中，等待串口可用。" : live.usb_message || "等待 USB 串口。";
+    } else if (model) reason = "固件自报 · " + model.source;
+    else if (fields.chip) reason = "已识别芯片 " + fields.chip.value + "，当前日志尚未报告整板型号。";
+    else if (!live.connection_rx) reason = "已连接 " + live.port + "，本次连接尚未收到数据。";
+    else reason = "已收到设备数据，尚未读到可识别的板型声明。";
+    const title = model?.value || (live?.connected ? "待识别" : live ? "未连接" : "暂不可用");
+    if (idx("Model").textContent !== title) idx("Model").textContent = title;
+    if (idx("ModelReason").textContent !== reason) idx("ModelReason").textContent = reason;
+    const evidence = model || fields.chip;
+    const link = idx("ModelLog");
+    link.hidden = !evidence?.log_id;
+    if (!link.hidden) {
+      const run = live.run, ref = "L" + evidence.log_id;
+      link.textContent = "查看原始日志 " + ref;
+      link.onclick = handle(() => showEvidence({run}, ref));
+    }
+  }
   function board() {
+    identity();
     const rows = live?.components || [], connected = !!live?.connected;
     const filter = idx("Filter").value;
-    const key = JSON.stringify([connection, connected, rows, filter, live?.rx, live?.tx]);
+    const key = JSON.stringify([connection, connected, rows, filter, live?.profile, live?.rx, live?.tx]);
     if (key === boardKey) return;
     boardKey = key;
     const seen = rows.filter(r => r.log_id);
@@ -74,7 +104,7 @@ const renderOverview = (() => {
     const reported = expected.filter(r => r.log_id).length;
     const pct = expected.length ? Math.round(100 * reported / expected.length) : null;
     ring("Coverage", pct, pct === null ? "—" : pct + "%");
-    list("BoardInfo", [["已报告 / 清单里的部件", expected.length ? reported + " / " + expected.length : "—"], ["板子型号", live?.profile || "—"],
+    list("BoardInfo", [["已报告 / 清单里的部件", expected.length ? reported + " / " + expected.length : "—"], ["测试清单", live?.profile || "—"],
       ["接收 / 发送", live ? live.rx.toLocaleString() + " / " + live.tx.toLocaleString() + " B" : "—"]]);
     const shown = rows.filter(r => filter === "all" || (filter === "reported" ? r.log_id : faults.has(r.status) || r.status === "上报超时"));
     const area = idx("Parts");

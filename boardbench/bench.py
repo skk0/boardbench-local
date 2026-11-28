@@ -198,6 +198,7 @@ class Bench:
         if keep_connection and self.ser and self.current_rx_log_id:
             self.save_smart("切换检测配置")
         self.current_rx_log_id = None
+        self.connection_rx = 0
         self.endurance.stop("会话切换")
         self.components.reset()
         self.usb_screen.reset()
@@ -368,6 +369,7 @@ class Bench:
         self.lost = None
         self.reset_on_open = False
         self.current_rx_log_id = None
+        self.connection_rx = 0
         self.components.reset()
         self.usb_screen.reset()
         self.ser = handle
@@ -389,6 +391,7 @@ class Bench:
         if self.ser or self.job or (self.usb and self.usb != address):
             raise ValueError("请先断开现在的连接；换板子时软件会新开一条记录。")
         self.current_rx_log_id = None
+        self.connection_rx = 0
         self.components.reset()
         self.usb_screen.reset()
         self.ser = await NetworkPort.connect(host, port, transport)
@@ -435,6 +438,7 @@ class Bench:
                 if count and len(pending) < 8192:
                     data = self.ser.read(min(count, 8192))
                     self.rx += len(data)
+                    self.connection_rx += len(data)
                     # On a screen-capable port, screenshot payloads are separate from command replies.
                     reply = replies.feed(data) if self.transport == "串口" else data
                     if reply:

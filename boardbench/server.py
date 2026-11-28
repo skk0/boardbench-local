@@ -147,6 +147,7 @@ def make_app(directory, monitor_usb=True, close_window=None, port=8765):
                 remembered_usb=auto.known(),
                 endurance=bench.endurance.active and {k:bench.endurance.active[k] for k in ("id","started","minutes","variant")},
                 usb_ports=auto.describe(auto.online),
+                connection_rx=bench.connection_rx,
                 rx=bench.rx,
                 tx=bench.tx,
                 logs=logs,

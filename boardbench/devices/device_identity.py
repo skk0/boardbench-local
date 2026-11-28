@@ -10,7 +10,7 @@ PYTHON = re.compile(
 )
 XIAOZHI = re.compile(
     r"I\s*\([0-9]+\) Board: UUID=[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
-    r" SKU=([a-zA-Z0-9][a-zA-Z0-9_.-]{0,79})"
+    r" SKU=([a-zA-Z0-9][a-zA-Z0-9_./-]{0,79})"
 )
 APP_INFO = re.compile(r"I\s*\(\d+\) app_init: (Project name|App version):\s+([A-Za-z0-9][A-Za-z0-9.+_/-]{0,79})")
 COLOR = re.compile(r"\x1b\[[0-9;]*m")
@@ -38,6 +38,9 @@ def identify(line):
     sku = XIAOZHI.fullmatch(line)
     if sku:
         return "小智格式的板型声明", {"board": sku[1]}
+    declared = re.fullmatch(r"BoardBenchProbe board: ([A-Za-z0-9][A-Za-z0-9._ /-]{0,79})", line)
+    if declared:
+        return "诊断固件板型声明", {"board": declared[1].strip()}
     if line == "BoardBenchProbe ready":
         return "诊断固件启动标识", {"firmware": "BoardBenchProbe"}
     return None

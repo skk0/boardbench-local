@@ -175,6 +175,26 @@ class ReconnectLoopTests(unittest.IsolatedAsyncioTestCase):
                 waits.append(round(self.auto.next_try.pop(path) - time.monotonic()))
         return waits
 
+    async def test_new_ch340_without_serial_recognizes_only_received_board_name(self):
+        self.auto.db.execute("DELETE FROM remembered_usb")
+        ch340 = dict(DEVICE, vid=0x1A86, pid=0x7523, serial=None, label="USB-SERIAL CH340")
+        virtual = dict(path="COM1", vid=None, pid=None, serial=None, label="communications port")
+        with patch.object(Bench, "ports", return_value=[virtual]) as ports:
+            await self.auto.check()
+            ports.return_value = [virtual, ch340]
+            await self.auto.check()
+            self.assertIsNotNone(self.b.ser)
+            await asyncio.sleep(.12)
+            identity = self.b.components.identity["board"]
+            self.assertEqual(identity["value"], "life-box")
+            self.assertEqual(self.b.tx, 0)
+            self.assertEqual(self.b.profile, "通用串口设备")
+            self.assertGreater(self.b.connection_rx, 0)
+            await self.b.disconnect()
+            self.b.connect(PORT, 115200)
+            self.assertFalse(self.b.components.identity)
+            self.assertEqual(self.b.connection_rx, 0)
+
     async def test_reset_on_open_loop_is_capped(self):
         run = self.b.run
         with patch("boardbench.bench.open_without_reset", legacy_open):
