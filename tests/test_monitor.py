@@ -123,3 +123,36 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             '{"bb":1,"status":"sample","part":"<script>"}',
         ]:
             self.assertIsNone(decode(val))
+
+
+class PlainComponentTests(unittest.TestCase):
+    def test_plain_rx_appears_in_state_and_links_to_original_message(self):
+        from boardbench.reports.replay import annotate
+        b = Bench(":memory:")
+        self.addCleanup(b.db.close)
+        fixtures = (
+            ("This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision v0.0, 16MB external flash",
+             "flash", "16 MB 外置 Flash（固件上报）"),
+            ("PSRAM found, inputBufferSize: 123456 bytes", "psram", "已检测到 PSRAM，容量未上报"),
+            ("WiFi Connected, Please Wait...", "wifi", "Wi-Fi 已连接（固件上报）"),
+        )
+        for message, part, value in fixtures:
+            b.log("TX", "串口", message)
+            self.assertNotIn(part, b.components.last)
+            evidence = b.log("RX", "串口", message)
+            row = next(r for r in b.components.states(b.profile, True) if r["part"] == part)
+            self.assertEqual((row["log_id"], row["value"], row["status"]), (evidence, value, "固件日志"))
+            raw = b.db.execute("SELECT message FROM logs JOIN component_events ON logs.id=component_events.log WHERE part=?", (part,)).fetchone()
+            self.assertEqual(raw[0], message)
+            self.assertEqual(annotate(dict(message=message, level="RX", source="串口"))["part"], part)
+        self.assertEqual(set(b.components.last), {"flash", "psram", "wifi"})
+        self.assertNotIn("board", b.device_identity)
+        b.log("RX", "串口", "WiFi disconnected")
+        self.assertIn("已断开", b.components.last["wifi"]["value"])
+
+    def test_generic_and_sensitive_text_is_not_component_evidence(self):
+        for text in ("Connected!", "inputBufferSize: 123456 bytes", "Trying: my-network",
+                     "ssid:example password:example", "WiFi connected password:example",
+                     "PSRAM found? no", "This is esp32s3 chip; flash read failed", "16MB external flash?"):
+            with self.subTest(text=text):
+                self.assertIsNone(decode(text))

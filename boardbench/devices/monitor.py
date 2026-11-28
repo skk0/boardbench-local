@@ -85,6 +85,33 @@ TAGS = {
 }
 
 
+# ESP-IDF hello_world's chip-info printf ends with the queried Flash capacity.
+# Earlier fields list chip features, not the connection state of its radios.
+CHIP_FLASH = re.compile(
+    r"This is esp[0-9a-z-]+ chip with [1-9]\d? CPU core\(s\), "
+    r"[A-Za-z0-9/,. ()-]{0,96}, silicon revision v\d+\.\d+, "
+    r"([1-9]\d{0,5})\s*MB (external|embedded) flash", re.I
+)
+PSRAM_FOUND = re.compile(r"PSRAM found(?:, inputBufferSize: [0-9]{1,10} bytes)?", re.I)
+WIFI_EVENT = re.compile(r"Wi-?Fi[ :]+(connected|disconnected|connection failed)(?:, please wait\.{3}|[.!])?", re.I)
+
+
+def plain_component(text):
+    flash = CHIP_FLASH.fullmatch(text)
+    if flash:
+        location = "外置" if flash[2].lower() == "external" else "内置"
+        return "flash", "固件日志", f"{flash[1]} MB {location} Flash（固件上报）", False, ""
+    if PSRAM_FOUND.fullmatch(text):
+        return "psram", "固件日志", "已检测到 PSRAM，容量未上报", False, ""
+    wifi = WIFI_EVENT.fullmatch(text)
+    if wifi:
+        value = {"connected": "已连接", "disconnected": "已断开", "connection failed": "连接失败"}[wifi[1].lower()]
+        return "wifi", "固件日志", f"Wi-Fi {value}（固件上报）", False, ""
+    if text == "Start WiFi Connect!":
+        return "wifi", "固件日志", "正在连接 Wi-Fi", False, ""
+    return None
+
+
 def decode(line):
     plain = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
     if plain.startswith("{") and len(plain) <= 4096:
@@ -127,7 +154,7 @@ def decode(line):
                 False,
                 model,
             )
-    return None
+    return plain_component(plain) if len(plain) <= 256 else None
 
 
 class Components:
