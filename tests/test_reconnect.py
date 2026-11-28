@@ -1,6 +1,7 @@
 """Reproduce the ESP32-S3 USB-Serial/JTAG reboot loop with a fake serial layer and prove it is gone."""
 
 import asyncio
+import os
 import time
 import unittest
 from unittest.mock import patch
@@ -245,7 +246,7 @@ class ChipProbeTests(unittest.IsolatedAsyncioTestCase):
         for chip in ("ESP32-S3", "ESP32-C3", None):
             with self.subTest(chip=chip):
                 b = Bench(":memory:")
-                FakeSerial.board, FakeSerial.windows = FakeBoard(), False
+                FakeSerial.board, FakeSerial.windows = FakeBoard(), os.name == "nt"
                 FakeSerial.board.output.clear()
                 reader = AsyncMock(return_value=chip, side_effect=None if chip else ValueError("无 ROM 应答"))
                 with (patch.object(Bench, "ports", return_value=[DEVICE]),
