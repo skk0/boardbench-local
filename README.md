@@ -12,7 +12,8 @@
 - Mac 使用系统 WebKit，Windows 使用 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。若 Windows 缺少运行时，请安装微软提供的运行时。Releases 里的 Mac 包未经 Apple 公证，Windows EXE 未签名。首次使用请查看[下载校验与打开步骤](docs/distribution.md#安装)。正式发行版的证书准备、签名及验签方法见[维护者发布流程](docs/distribution.md#维护者发布已签名版本)。
 - 从源码运行推荐 Python 3.12。macOS 双击 `macOS.command`，Windows 双击 `Windows.cmd`。脚本首次创建虚拟环境并安装依赖。也可运行 `python -m pip install -r requirements.txt` 和 `python app.py`。
 - `--browser` 在系统浏览器打开，`--no-browser` 仅启动本机服务。串口和日志均由本机进程处理。默认端口已占用时可关闭原实例，或使用 `--port 8766`。应用内支持导入检查清单、导出报告及切换明暗外观。
-- 总览顶部的「实际板型」显示当前设备在串口或网络日志中声明的型号；点击日志编号可查看原文。未收到板型时会显示原因。测试清单可单独选择。
+- 总览顶部的「实际板型」识别设备日志中的板型声明，也支持按厂商公布的 USB VID/PID 识别 Arduino Uno、Mega 2560 和 Adafruit Feather ESP32S3 4 MB Flash / 2 MB PSRAM 的特定 USB 标识。点击日志编号可查看依据。未收到板型时会显示原因。测试清单可单独选择。
+- 在实时记录里搜索「设备识别」，可查看 USB 转串口、整板、主控和元件型号。比如 CH340 只代表转串口芯片，整板型号会继续等设备日志。摄像头成功探测日志或带有 `model` 的元件上报会生成摘要，保留状态与原始日志编号。相同型号的周期上报不会重复生成摘要。
 - 用 USB **数据线**连接，选好板子（USB 端口）、速度（波特率）和数据格式。Windows 如无法枚举，请检查设备管理器和板载 USB 转串口芯片的驱动。关闭其他占用端口的串口监视器。
 
 面板的“怎么连”支持 USB 线（串口）、网络 · TCP 和网络 · UDP。网络板填“板子的网络地址”和固件实际监听的“端口号”，三种连接方式共享发命令、检查、读数曲线和记录。UDP 启用后日志会显示本机接收端口，首次收包可确认对端有响应。

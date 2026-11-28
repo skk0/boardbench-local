@@ -44,3 +44,29 @@ def identify(line):
     if line == "BoardBenchProbe ready":
         return "诊断固件启动标识", {"firmware": "BoardBenchProbe"}
     return None
+
+# Exact board IDs published in ArduinoCore-avr/boards.txt and CircuitPython's
+# adafruit_feather_esp32s3_4mbflash_2mbpsram/mpconfigboard.mk.
+USB_BOARDS = {
+    (0x2341, 0x0043): "Arduino Uno",
+    (0x2A03, 0x0043): "Arduino Uno",
+    (0x2341, 0x0042): "Arduino Mega 2560",
+    (0x2A03, 0x0042): "Arduino Mega 2560",
+    (0x239A, 0x811C): "Adafruit Feather ESP32S3 4MB Flash 2MB PSRAM",
+}
+
+
+def usb_model(port):
+    ids = port.get("vid"), port.get("pid")
+    pair = "%04X:%04X" % ids if all(type(v) is int for v in ids) else ""
+    if ids in USB_BOARDS:
+        return "board", USB_BOARDS[ids], f"USB 板型标识 {pair}"
+    if ids == (0x1A86, 0x7523):
+        bridge = "CH340" if re.search(r"\bCH340\b", port.get("label") or "", re.I) else "CH340/CH341 系列"
+    elif ids == (0x10C4, 0xEA60):
+        bridge = "CP210x 系列"
+    elif ids == (None, None) and re.fullmatch(r"USB-SERIAL CH340(?: \(COM\d+\))?", port.get("label") or "", re.I):
+        bridge = "CH340"
+    else:
+        return None
+    return "bridge", bridge, ("USB 串口标识 " + pair).strip()

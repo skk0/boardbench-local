@@ -73,7 +73,7 @@ function renderComponents() {
   if (identityBox.dataset.key !== identityKey) {
     identityBox.dataset.key = identityKey;
     identityBox.replaceChildren();
-    for (const [key, label] of [["board", "板子自报型号"], ["chip", "芯片"], ["firmware", "固件"], ["version", "固件版本"]]) {
+    for (const [key, label] of [["board", "板型"], ["bridge", "USB 转串口"], ["chip", "芯片"], ["firmware", "固件"], ["version", "固件版本"]]) {
       const entry = identity[key];
       if (!entry) continue;
       const run = state.run;
@@ -92,9 +92,9 @@ function renderComponents() {
     "测试清单 · " + state.profile + " · " + seen + " 个部件有报告";
   $("monitorHelp").hidden = !(state.connected && seen);
   $("monitorHelp").textContent = "点部件名能看它的记录。";
-  $("emptyParts").textContent = state.connected
-    ? "已连上，正在等板子报告部件状态。"
-    : "连上板子后，这里会显示各个部件的状态和最新读数。";
+  if (!state.connected) $("emptyParts").textContent = "连上板子后，这里会显示各个部件的状态和最新读数。";
+  else if (!state.connection_rx) $("emptyParts").textContent = "已连接 " + state.port + "，本次接收 0 字节。正在等设备输出日志。";
+  else $("emptyParts").textContent = "本次已收到设备数据，尚无可识别的部件报告。";
   for (const r of records) {
     let node = componentNodes.get(r.part);
     if (!node) {

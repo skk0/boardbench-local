@@ -68,3 +68,47 @@ class DeviceIdentityTests(unittest.TestCase):
         self.assertEqual(b.tx, 0)
         b.new(b.profile)
         self.assertFalse(fields)
+
+    def test_usb_fallback_is_scoped_and_bridge_is_never_the_board(self):
+        from boardbench.devices.device_identity import usb_model
+
+        b = Bench(":memory:")
+        self.addCleanup(b.db.close)
+        for vid, pid, label, field, model in (
+            (0x1A86, 0x7523, "USB-SERIAL CH340 (COM5)", "bridge", "CH340"),
+            (0x1A86, 0x7523, "USB Serial", "bridge", "CH340/CH341 系列"),
+            (0x239A, 0x811C, "", "board", "Adafruit Feather ESP32S3 4MB Flash 2MB PSRAM"),
+        ):
+            b.usb_identification = usb_model(dict(vid=vid, pid=pid, label=label))
+            b.record_usb_identity()
+            self.assertEqual(set(b.device_identity), {field})
+            info = b.device_identity[field]
+            self.assertEqual(info["value"], model)
+            self.assertIn(model, b.db.execute("SELECT message FROM logs WHERE id=?", (info["log_id"],)).fetchone()[0])
+        self.assertIsNone(usb_model(dict(vid=0x303A, pid=0x1001, label="USB JTAG/serial")))
+        b.log("RX", "串口", "BoardBenchProbe board: actual-board")
+        self.assertEqual(b.device_identity["board"]["value"], "actual-board")
+        b.log("RX", "串口", "ESP-ROM:esp32s3-20210327")
+        self.assertEqual(b.device_identity["board"], info)
+        b.new(b.profile)
+        self.assertFalse(b.device_identity)
+
+    def test_model_notices_are_scoped_deduplicated_and_reference_rx(self):
+        b = Bench(":memory:")
+        self.addCleanup(b.db.close)
+        line = 'I (200) camera: Detected OV2640 camera'
+        b.log("TX", "串口", line)
+        b.log("RX", "串口", 'E (200) camera: Detected OV5640 camera')
+        original = b.log("RX", "串口", line)
+        b.log("RX", "串口", line)
+        sample = '{"bb":1,"part":"temperature","status":"sample","model":"BME280"}'
+        first = b.log("RX", "串口", sample)
+        b.log("RX", "串口", sample)
+        messages = [r[0] for r in b.db.execute("SELECT message FROM logs WHERE source='设备识别' ORDER BY id")]
+        self.assertEqual(messages, [
+            f"摄像头 · OV2640（固件日志） · 原文 L{original}",
+            f"温度 · BME280（有读数） · 原文 L{first}",
+        ])
+        b.log("RX", "串口", "ESP-ROM:esp32s3-20210327")
+        b.log("RX", "串口", line)
+        self.assertEqual(b.db.execute("SELECT COUNT(*) FROM logs WHERE source='设备识别'").fetchone()[0], 4)

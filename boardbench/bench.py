@@ -22,6 +22,7 @@ import serial
 from serial.tools import list_ports
 from boardbench.devices.usb_screen import SerialReplyFilter, UsbScreen
 from boardbench.checks.smart import evaluate
+from boardbench.devices.device_identity import usb_model
 from boardbench.devices.monitor import Components, RESET_WINDOW
 from boardbench.checks.endurance import Endurance
 from boardbench.checks.replies import ReplyMatch
@@ -148,6 +149,8 @@ class Bench:
         self.reset_on_open = False
         self.endurance = Endurance(self.db)
         self.usb_screen = UsbScreen()
+        self.usb_identification = None
+        self.usb_fields = {}
         self.components = Components(self.db)
         previous = self.db.execute(
             "SELECT profile FROM runs WHERE port != '离线故障包' ORDER BY id DESC LIMIT 1"
@@ -205,6 +208,9 @@ class Bench:
         self.capture_key = None
         self.tests = self.profiles()[profile]
         self.profile = profile
+        if not keep_connection or not self.ser:
+            self.usb_identification = None
+        self.usb_fields.clear()
         self.components.use_profile(profile)
         self.run = self.db.execute(
             "INSERT INTO runs(started,profile,tests) VALUES(?,?,?)",
@@ -214,12 +220,34 @@ class Bench:
         self.rx = self.tx = 0
         self.log("INFO", "会话", "开始测试 · " + profile)
 
+        if keep_connection and self.ser and self.transport == "串口":
+            self.record_usb_identity()
+            self.capture_settings()
+
+    @property
+    def device_identity(self):
+        return {**self.usb_fields, **self.components.identity}
+
+    def record_usb_identity(self):
+        self.usb_fields.clear()
+        if not self.usb_identification:
+            self.log("INFO", "设备识别", "板型待识别 · USB 端口未提供已知的板型标识，等待读取设备日志。")
+            return
+        key, value, source = self.usb_identification
+        message = (f"板型 · {value}（{source}）" if key == "board" else
+                   f"USB 转串口 · {value}（{source}）。板型待识别，等待读取设备日志。")
+        evidence = self.log("INFO", "设备识别", message)
+        self.usb_fields[key] = dict(value=value, source=source, log_id=evidence)
+
     def capture_settings(self):
         settings = {"连接": self.transport}
         if self.transport == "串口":
             settings.update(波特率=str(self.baud), 格式=self.framing)
         for key, label in (("board", "固件板型"), ("firmware", "固件"), ("chip", "芯片"), ("version", "固件版本")):
             if entry := self.components.identity.get(key):
+                settings[label] = entry["value"]
+        for key, label in (("board", "USB 板型标识"), ("bridge", "USB 转串口")):
+            if entry := self.usb_fields.get(key):
                 settings[label] = entry["value"]
         if settings != self.capture_key:
             self.db.execute("INSERT OR REPLACE INTO capture_info VALUES(?,?)",
@@ -234,7 +262,12 @@ class Bench:
         )
         if level == "RX":
             self.current_rx_log_id = row.lastrowid
-            reboot = self.components.observe(self.db, self.run, row.lastrowid, at, message)
+            notices = []
+            reboot = self.components.observe(self.db, self.run, row.lastrowid, at, message, notices)
+            self.db.executemany(
+                "INSERT INTO logs(run,at,level,source,message,raw) VALUES(?,?,'INFO','设备识别',?,'')",
+                [(self.run, at, f"{notice} · 原文 L{row.lastrowid}") for notice in notices],
+            )
             self.capture_settings()
             self.endurance.observe(self, message, row.lastrowid, reboot)
             if reboot:
@@ -319,10 +352,13 @@ class Bench:
         ]
 
     def select(self, port):
-        if port not in {p["path"] for p in self.ports()}:
+        device = next((p for p in self.ports() if p["path"] == port), None)
+        if device is None:
             raise ValueError("这个 USB 端口不见了：请检查数据线有没有插好，然后点“重新找端口”。")
         if self.usb and port != self.usb:
             raise ValueError("这次记录用的是另一块板子。换板子前请先断开，软件会新开一条记录，免得两块板子的结果混在一起。")
+
+        return device
 
     def bind(self, port):
         self.usb = port
@@ -349,7 +385,7 @@ class Bench:
         if self.ser or self.job:
             raise ValueError("已经连着板子，或者有任务正在进行。")
         self.check_space()
-        self.select(port)
+        device = self.select(port)
         if not 300 <= baud <= 4000000:
             raise ValueError("速度（波特率）要在 300–4000000 之间，不确定就填 115200。")
         if framing not in ("8N1", "8E1", "8O1", "8N2", "7E1", "7O1"):
@@ -378,8 +414,10 @@ class Bench:
         self.bind(port)
         self.baud = baud
         self.framing = framing
+        self.log("INFO", "串口", f"已连接 {port} · {baud} {framing} · 开始监听，当前接收 0 字节")
+        self.usb_identification = usb_model(device)
+        self.record_usb_identity()
         self.capture_settings()
-        self.log("INFO", "串口", f"已连接 {port} · {baud} {framing}")
         self.reader = asyncio.create_task(self.read_loop())
 
     async def network(self, transport, host, port):
@@ -395,6 +433,8 @@ class Bench:
         self.components.reset()
         self.usb_screen.reset()
         self.ser = await NetworkPort.connect(host, port, transport)
+        self.usb_identification = None
+        self.usb_fields.clear()
         self.connection_id += 1
         self.transport = transport
         self.network_host = host

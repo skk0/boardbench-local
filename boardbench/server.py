@@ -140,7 +140,7 @@ def make_app(directory, monitor_usb=True, close_window=None, port=8765):
                 job=bench.taskname,
                 suite=suite.state(),
                 storage_hold=bench.storage_hold,
-                device_identity=bench.components.identity if bench.ser else {},
+                device_identity=bench.device_identity if bench.ser else {},
                 components=bench.components.states(bench.profile, bool(bench.ser)),
                 auto_usb=auto.enabled,
                 usb_message=auto.message,

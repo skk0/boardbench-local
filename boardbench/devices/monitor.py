@@ -5,7 +5,7 @@ import json
 import re
 import time
 
-from boardbench.devices.device_identity import identify
+from boardbench.devices.device_identity import USB_BOARDS, identify
 from boardbench.checks.smart import key_cycles
 
 RESET_WINDOW = 5    # seconds after opening in which a vanished port or ROM banner means "we reset it"
@@ -114,12 +114,18 @@ def decode(line):
         if part == "modem" and re.search(r"\b(?:IMEI|IMSI|ICCID)\b", plain, re.I):
             return None
         if part:
+            model = ""
+            if tag == "camera" and match["level"] == "I":
+                # esp32-camera reports this exact line after a successful sensor probe.
+                sensor = re.fullmatch(r"Detected ([A-Z]{2,6}[0-9]{2,6}[A-Z0-9]*) camera", plain[match.end():].strip())
+                if sensor:
+                    model = sensor[1]
             return (
                 part,
                 "固件报错" if match["level"] == "E" else "固件日志",
                 plain[:400],
                 False,
-                "",
+                model,
             )
     return None
 
@@ -177,12 +183,13 @@ class Components:
         self.last.clear()
         self.identity.clear()
 
-    def observe(self, db, run, log_id, at, line):
+    def observe(self, db, run, log_id, at, line, notices):
         identity = identify(line)
         reboot = bool(identity and identity[0] == "ROM 启动标识")
         if reboot:
             self.reset()
         if identity:
+            prior = self.identity.copy()
             source, fields = identity
             # A new startup banner supersedes earlier application declarations.
             rom_chip = self.identity.get("chip", {})
@@ -192,6 +199,10 @@ class Components:
                 self.identity["chip"] = rom_chip
             for key, value in fields.items():
                 self.identity[key] = dict(value=value, source=source, log_id=log_id)
+            for key, label in (("board", "板型"), ("chip", "主控")):
+                entry = self.identity.get(key)
+                if entry and entry.get("value") != prior.get(key, {}).get("value"):
+                    notices.append(f"{label} · {entry['value']}（{entry['source']}）")
         parsed = decode(line)
         if not parsed:
             return reboot
@@ -200,10 +211,13 @@ class Components:
             chip = re.fullmatch(r"(ESP32(?:-[A-Za-z0-9-]+)?) \| CPU [0-9]+ MHz \| uptime [0-9]+ ms", value)
             if chip and self.identity.get("chip", {}).get("value") != chip[1]:
                 self.identity["chip"] = dict(value=chip[1], source="主控遥测", log_id=log_id)
+                notices.append(f"主控 · {chip[1]}（主控遥测）")
         if part not in self.last and len(self.last) >= 128:
             return
         now = time.monotonic()
         previous = self.last.get(part, {})
+        if model and (model != previous.get("model") or (state == "固件声明未安装") != (previous.get("status") == "固件声明未安装")):
+            notices.append(f"{PARTS.get(part, part)} · {model}（{state}）")
         if not model and state != "固件声明未安装":
             model = previous.get("model", "")
         cycles = {}
@@ -391,8 +405,8 @@ class AutoUSB:
                 if len(usb) == 1:
                     device = usb[0]
                     ident = self.identity(device)
-                    if ((device["vid"], device["pid"]) in USB_BRIDGES
-                            and (ident or device["path"] in self.inserted)):
+                    ids = device["vid"], device["pid"]
+                    if (ids in USB_BRIDGES or ids in USB_BOARDS) and (ident or device["path"] in self.inserted):
                         key = json.dumps(ident) if ident else "port:" + device["path"]
                         matches = [(device, dict(identity=key, baud=115200, framing="8N1"))]
                 if not matches:

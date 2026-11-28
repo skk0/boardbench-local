@@ -296,6 +296,14 @@ function logs(force = false) {
           (hex && r.raw ? r.raw : r.message),
       );
       msg.className = "msg";
+      const ref = r.source === "设备识别" && r.message.match(/ · 原文 (L[0-9]+)$/);
+      if (ref) {
+        const run = state.run;
+        msg.textContent = r.source + " │ " + r.message.slice(0, ref.index) + " · ";
+        const link = button("原文 " + ref[1], () => showEvidence({ run }, ref[1]));
+        link.className = "text-link";
+        msg.append(link);
+      }
       line.append(time, tag, msg);
       return line;
     }),
