@@ -14,6 +14,7 @@ import webbrowser
 
 from aiohttp import web
 
+from boardbench.updates import VERSION, Updater, installation
 from boardbench.bench import Bench
 from boardbench.checks.profiles import validate
 from boardbench.checks.replies import try_sample
@@ -29,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT = Path.home() / ".boardbench"
 
 
-def make_app(directory, monitor_usb=True):
+def make_app(directory, monitor_usb=True, close_window=None, port=8765):
     directory.mkdir(parents=True, exist_ok=True)
     bench = Bench(directory / "history.sqlite3")
     echo = Echo(bench)
@@ -41,12 +42,17 @@ def make_app(directory, monitor_usb=True):
     flash = Flasher(bench)
     faultpack.install(bench.db)
 
+    target = installation() if close_window else None
+    updater = Updater(*target) if target else None
+
     @web.middleware
     async def policy(req, handler):
         if req.url.host not in {"127.0.0.1", "localhost", "::1"}:
             raise web.HTTPForbidden()
         if req.method == "POST" and req.headers.get("X-BoardBench") != token:
             raise web.HTTPForbidden()
+        if updater and updater.phase == "restarting" and req.method == "POST":
+            raise web.HTTPConflict(text="桌面软件正在重启。")
         try:
             response = await handler(req)
         except (ValueError, KeyError, TypeError, OSError) as exc:
@@ -78,8 +84,30 @@ def make_app(directory, monitor_usb=True):
                 groups=len(plan["groups"]),
             )
         return web.json_response(
-            dict(token=token, profiles=list(profiles), plans=plans, ip=Echo.address())
+            dict(token=token, profiles=list(profiles), plans=plans, ip=Echo.address(),
+                 desktop_update=updater.state() if updater else None, version=VERSION)
         )
+
+    @routes.get("/api/update")
+    async def update_state(req):
+        if not updater:
+            raise web.HTTPNotFound()
+        return web.json_response(updater.state())
+
+    @routes.post("/api/update/{action:check|download|install}")
+    async def update_action(req):
+        if not updater:
+            raise web.HTTPNotFound()
+        action = req.match_info["action"]
+        async with lock:
+            if action == "install":
+                if bench.job or bench.endurance.active or (suite.state() or {}).get("status") == "运行中" or echo.runner:
+                    raise ValueError("请先结束当前测试、刷写或语音回声，再重启更新。")
+                updater.handoff(port, directory)
+                asyncio.get_running_loop().call_later(0.5, close_window)
+            else:
+                updater.start(action)
+        return web.json_response(updater.state())
 
     @routes.get("/api/ports")
     async def ports(req):
@@ -339,6 +367,8 @@ def make_app(directory, monitor_usb=True):
         d = await req.json()
         op = req.match_info["op"]
         async with lock:
+            if updater and updater.phase == "restarting":
+                raise ValueError("软件正在重启。")
             if d.get("run") != bench.run:
                 raise ValueError("记录已经换了一条，请刷新页面再试。")
             if op == "new":
@@ -471,12 +501,16 @@ def make_app(directory, monitor_usb=True):
     app.router.add_static("/static/", ROOT / "web")
 
     async def startup(app):
+        if updater and monitor_usb:
+            updater.start("check")
         if monitor_usb:
             auto.task = asyncio.create_task(auto.watch())
 
     app.on_startup.append(startup)
 
     async def close(app):
+        if updater:
+            await updater.stop()
         if auto.task:
             auto.task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -497,11 +531,12 @@ def main():
     parser.add_argument("--browser", action="store_true", help="open in the system browser")
     parser.add_argument("--desktop-smoke", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT)
+    parser.add_argument("--update-receipt", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if sys.platform in ("darwin", "win32") and not (args.browser or args.no_browser):
         from boardbench.desktop import run_window, startup_error
         try:
-            run_window(args.port, lambda: make_app(args.data_dir, monitor_usb=not args.desktop_smoke), args.desktop_smoke)
+            run_window(args.port, lambda close: make_app(args.data_dir, monitor_usb=not args.desktop_smoke, close_window=close, port=args.port), args.desktop_smoke, args.update_receipt)
         except Exception as exc:
             if args.desktop_smoke:
                 raise

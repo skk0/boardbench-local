@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import os
 import socket
 import sys
 import threading
@@ -24,7 +25,7 @@ class Picker:
         return chosen[0] if chosen else ""
 
 
-def run_window(port, make_service, smoke=False):
+def run_window(port, make_service, smoke=False, receipt=None):
     import webview
 
     # Claim the address before opening the session database or enumerating devices.
@@ -41,7 +42,7 @@ def run_window(port, make_service, smoke=False):
         ready = concurrent.futures.Future()
 
         async def serve():
-            runner = web.AppRunner(make_service(), access_log=None)
+            runner = web.AppRunner(make_service(lambda: window.destroy()), access_log=None)
             try:
                 await runner.setup()
                 await web.SockSite(runner, listener).start()
@@ -72,6 +73,14 @@ def run_window(port, make_service, smoke=False):
                 width=1360, height=900, min_size=(700, 520),
                 text_select=True, background_color="#f5f5f7", js_api=picker,
             )
+            if receipt is not None:
+                from boardbench.updates import installation
+                installed = installation()
+                if (installed and receipt.name == "started" and receipt.parent.name.startswith(".BoardBench-update-")
+                        and receipt.parent.resolve().parent == installed[0].parent and receipt.parent.is_dir()):
+                    def acknowledge():
+                        receipt.write_text(str(os.getpid()), encoding="ascii")
+                    window.events.loaded += acknowledge
             picker._window = window
             checked = concurrent.futures.Future()
 
@@ -164,6 +173,9 @@ def run_window(port, make_service, smoke=False):
                                 time.sleep(.1)
                             else:
                                 raise RuntimeError("回放未能定位首条日志")
+                            window.evaluate_js("document.getElementById('appUpdate').click()")
+                            if not window.evaluate_js("document.querySelector('#dialog[open] .app-update strong')?.textContent.includes('BoardBench  v')"):
+                                raise RuntimeError("桌面版更新入口未打开")
                             checked.set_result(True)
                             break
                         time.sleep(0.15)

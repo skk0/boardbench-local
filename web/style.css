@@ -1324,3 +1324,9 @@ dialog pre {
 @media (max-width: 970px) {
   .rail-more > summary.rail-label { display: flex; justify-content: center; font-size: 11px; margin: 0 2px 6px; }
 }
+
+#appUpdate { min-height: 36px; color: var(--active); }
+.app-update { display: grid; gap: 12px; }
+.app-update button { justify-self: start; min-height: 44px; }
+.app-update progress { width: 100%; accent-color: var(--accent); }
+.app-update pre { white-space: pre-wrap; overflow-wrap: anywhere; }

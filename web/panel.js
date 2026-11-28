@@ -85,6 +85,7 @@ function modal(title) {
 async function setup() {
   const d = await get("/api/setup");
   token = d.token;
+  window.showDesktopUpdate?.(d.desktop_update);
   suitePlans = d.plans;
   const selected = $("profile").value;
   $("profile").replaceChildren(...d.profiles.map((x) => new Option(x, x)));

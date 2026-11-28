@@ -10,3 +10,4 @@ test-results/
 .venv-desktop/
 .ruff_cache/
 docs/local/
+!desktop-assets/BoardBench.spec

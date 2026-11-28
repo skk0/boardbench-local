@@ -33,6 +33,10 @@ def main():
     version = parser.parse_args().version
     if not re.fullmatch(r"v\d+\.\d+\.\d+", version):
         parser.error("发行标签须使用 v主版本.次版本.修订号")
+    sys.path.insert(0, str(ROOT))
+    from boardbench.version import VERSION
+    if version != f"v{VERSION}":
+        parser.error(f"发布标签须与桌面版本 v{VERSION} 一致")
     mac = sys.platform == "darwin"
     if mac:
         identity = required("BOARDBENCH_MAC_IDENTITY")
