@@ -8,6 +8,7 @@ import plistlib
 import re
 import shutil
 import ssl
+import struct
 import subprocess
 import sys
 import tempfile
@@ -74,6 +75,24 @@ async def open_asset(client, url):
     raise ValueError("安装包重定向次数异常。")
 
 
+def embedded_signature(exe):
+    """Check the PE certificate table used by the Windows release signing process."""
+    with exe.open("rb") as stream:
+        stream.seek(0x3C)
+        pe_offset, = struct.unpack("<I", stream.read(4))
+        stream.seek(pe_offset)
+        if stream.read(4) != b"PE\0\0":
+            raise ValueError("安装目录中的程序不是有效的 Windows EXE。")
+        optional = pe_offset + 24
+        stream.seek(optional)
+        magic, = struct.unpack("<H", stream.read(2))
+        if magic not in (0x10B, 0x20B):
+            raise ValueError("无法识别 Windows 程序头。")
+        stream.seek(optional + (112 if magic == 0x20B else 96) + 4 * 8)
+        offset, size = struct.unpack("<II", stream.read(8))
+        return bool(offset and size)
+
+
 def prepare(archive, stage, target, mac):
     stage = stage.resolve()
     with zipfile.ZipFile(archive) as bundle:
@@ -87,16 +106,17 @@ def prepare(archive, stage, target, mac):
             with exe.open("rb") as stream:
                 if stream.read(2) != b"MZ":
                     raise ValueError("安装包未包含 Windows 程序。")
-            if sys.platform == "win32":
+            if sys.platform == "win32" and embedded_signature(target):
                 shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
                 verify = """
                     $ErrorActionPreference = 'Stop'
                     $old = Get-AuthenticodeSignature -LiteralPath $env:BB_TARGET
-                    if ($old.SignerCertificate) {
-                        $new = Get-AuthenticodeSignature -LiteralPath $env:BB_NEXT
-                        if ($new.Status -ne 'Valid' -or
-                            $new.SignerCertificate.Subject -ne $old.SignerCertificate.Subject) { exit 1 }
+                    $new = Get-AuthenticodeSignature -LiteralPath $env:BB_NEXT
+                    if (!$old.SignerCertificate -or $new.Status -ne 'Valid' -or
+                        $new.SignerCertificate.Subject -ne $old.SignerCertificate.Subject) {
+                        throw 'The new executable has no valid signature from the installed publisher.'
                     }
+                    exit 0
                 """
                 subprocess.run([str(shell), "-NoProfile", "-NonInteractive", "-Command", verify],
                                env={**os.environ, "BB_TARGET": str(target), "BB_NEXT": str(exe)},
@@ -235,7 +255,10 @@ class Updater:
             subprocess.Popen(["/bin/sh", script], cwd=self.stage.parent, env=env, start_new_session=True)
         else:
             shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
-            script = (HELPERS / "install-update.ps1").read_text(encoding="utf-8")
+            # Only the bundled helper supplies executable text. File paths are separate
+            # environment values, preserving spaces and quotes in Windows command lines.
+            env["BB_HELPER_SOURCE"] = (HELPERS / "install-update.ps1").read_text(encoding="utf-8")
+            script = "& ([ScriptBlock]::Create($env:BB_HELPER_SOURCE))"
             subprocess.Popen([str(shell), "-NoProfile", "-NonInteractive", "-Command", script], env=env,
                              cwd=self.stage.parent, creationflags=subprocess.CREATE_NO_WINDOW)
         self.phase = "restarting"

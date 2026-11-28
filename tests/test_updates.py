@@ -105,7 +105,7 @@ class UpdateServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(list(directory.iterdir()))
                 updater.release["digest"] = hashlib.sha256(data).hexdigest()
                 # Real Authenticode checks run against packaged PE files in desktop CI.
-                with patch("boardbench.updates.subprocess.run"):
+                with patch.object(updates, "embedded_signature", return_value=False):
                     updater.start("download")
                     await updater.task
                 self.assertEqual(updater.phase, "ready", updater.error)
